@@ -48,14 +48,17 @@ emoji_prime.py prepare VIDEO
 
 Output goes to `<video stem>.emojiprime/` next to the video. If that folder isn't writable, pass `--out DIR`.
 
-For long videos, bigger batches mean fewer subagents. `prepare --chunk 80` puts 80 cues in each prompt (the default is 40). For step B, `candidates --chunk 400` fits a 2-hour stream into about 7 prompts. For a YouTube video, also pass `--youtube VIDEO_ID` so the browser pack records which video it belongs to.
+Prompts are big on purpose: every subagent pays a fixed overhead, so fewer, larger prompts use far fewer tokens. The defaults are 120 cues per step-A prompt (`prepare --chunk`) and 400 items per step-B prompt (`candidates --chunk`), so a 90-minute stream is about 18 A prompts and 5 B prompts. For a YouTube video, also pass `--youtube VIDEO_ID` so the browser pack records which video it belongs to.
 
 ### 2. Answer the step-A prompts
 
 The output of `prepare` lists each `A_NN.md` with the `A_NN.json` it needs. Answer every prompt that has no `.json` yet:
 
-- **Preferred:** use subagents, up to about 5 in parallel. A fast model at low effort is enough, e.g. Sonnet. Give each one exactly this, with no paraphrase:
-  `Read <A_NN.md path> and do what it asks. Write only the JSON object (no prose, no code fences) to the path given in its first line. Reply only "done".`
+- **Preferred:** one subagent **per prompt**, at most 3 running at once. Don't give one subagent several prompts: each turn resends everything before it, so the cost grows faster than the work.
+  - Use the `emoji-prime-answerer` agent type if it's installed. It has only Read and Write, so it carries far less overhead than a general-purpose agent. The install copies `agents/emoji-prime-answerer.md` into `~/.claude/agents/`. If it isn't installed, use a general-purpose agent with model `sonnet`.
+  - Step A needs Sonnet (the agent's default).
+  - Give each one exactly this, with no paraphrase:
+    `Read <A_NN.md path> and do what it asks. Write only the JSON object (no prose, no code fences) to the path given in its first line. Reply only "done".`
 - **Without subagents:** read each prompt yourself and write its JSON file.
 - Don't edit the prompts. Each one is self-contained: senses and emoji per word, a rebus anchored to the words, and illustration search words.
 
@@ -65,7 +68,7 @@ The output of `prepare` lists each `A_NN.md` with the `A_NN.json` it needs. Answ
 emoji_prime.py candidates VIDEO
 ```
 
-This checks the A answers and lists any prompt that is still missing an answer. It then searches the Irasutoya catalog on the emoji-prime server (api.fazon.nexus; only the search words are sent) and writes `_build/llm/B_NN.md` (picking illustrations). Answer those exactly like step 2.
+This checks the A answers and lists any prompt that is still missing an answer. It then searches the Irasutoya catalog on the emoji-prime server (api.fazon.nexus; only the search words are sent) and writes `_build/llm/B_NN.md` (picking illustrations). Answer those like step 2, but with model `haiku`: picking a title by index is easy, and Haiku costs much less of the user's usage.
 
 ### 4. Build
 

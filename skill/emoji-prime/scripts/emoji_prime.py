@@ -25,23 +25,23 @@ from ep_common import clean_emoji, jdump, jload, log  # noqa: E402
 import ep_api as API  # noqa: E402
 import ep_irasutoya as IR  # noqa: E402
 
-CHUNK_A, CHUNK_B, N_CAND = 40, 60, 8
+CHUNK_A, CHUNK_B, N_CAND = 120, 400, 8  # big chunks: each prompt costs a fixed agent overhead
 LUA = os.path.join(os.path.dirname(HERE), "mpv", "emoji_prime.lua")
 
 PROMPT_A = """You are annotating a Japanese video for "emoji prime": pictures pop up over the video as words are spoken, so a Japanese learner understands WITHOUT any English.
 
 For every cue in the JSON below (text = the spoken line with spaces removed; words = its content words as dictionary forms), produce:
 
-1. "senses": for EVERY listed word, {"sense": a short Japanese monolingual gloss of the sense used IN THIS LINE, "emoji": 1-3 emoji picturing that sense, or null}. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
-2. "rebus": 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
-3. "queries": 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as {"q": word, "anchor": exact substring of the text}. Use [] for cries, interjection-only and name-only lines.
+1. "s" (senses): for EVERY listed word, [sense, emoji]: sense = a very short Japanese monolingual gloss (2-8 characters) of the sense used IN THIS LINE; emoji = 1-3 emoji picturing that sense, or null. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
+2. "r" (rebus): 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
+3. "q" (queries): 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as [word, anchor], anchor = exact substring of the text. Use [] for cries, interjection-only and name-only lines.
 
 4. Some cues have "set": prebaked set phrases with fixed emoji, as [emoji, the phrase as written in the text]. Put each one into the rebus exactly as given (that emoji, anchored to that phrase), and don't express it again with other emoji. The words inside a set phrase aren't listed, so they need no senses.
 
 Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 📅 🔟, keycaps and the like) or flags. No English anywhere.
 
 Answer with ONLY a JSON object, no prose and no code fences:
-{"<cue>": {"senses": {"<word>": {"sense": "...", "emoji": "..."}}, "rebus": [["😱", "わあ"], ...], "queries": [{"q": "...", "anchor": "..."}]}, ...}
+{"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": [["😱", "わあ"], ...], "q": [["<word>", "<anchor>"]]}, ...}
 with every cue id.
 
 Cues:
@@ -49,7 +49,7 @@ Cues:
 
 PROMPT_B = """Pick Irasutoya illustrations for "emoji prime" (pictures over a Japanese video that convey meaning without English).
 
-For each item below you get the spoken Japanese line, the word or idea to picture ("target"; for words also the sense used in that line), and numbered candidate illustration titles (0-based). Return the index of the candidate that most clearly depicts that meaning AS USED IN THE LINE, or null if none really fits. Prefer simple, readable pictures of the thing or action itself; reject pictures of a different sense, and anything whose title suggests text or lettering (イラスト文字, 文字, ロゴ, 看板 with words).
+For each item below you get the spoken Japanese line, the word or idea to picture ("target"; for words also the sense used in that line), and numbered candidate illustration titles (0-based; the usual 「のイラスト」 ending is left off). Return the index of the candidate that most clearly depicts that meaning AS USED IN THE LINE, or null if none really fits. Prefer simple, readable pictures of the thing or action itself; reject pictures of a different sense, and anything whose title suggests text or lettering (イラスト文字, 文字, ロゴ, 看板 with words).
 
 Answer with ONLY a JSON object, no prose and no code fences: {"<id>": index or null, ...} with every id.
 
@@ -175,6 +175,11 @@ def a_entry(c, ms):
     return e
 
 
+def short_title(t):
+    """Candidate titles for step B, minus the のイラスト that nearly all of them end with (saves tokens)."""
+    return t[:-len("のイラスト")] if t.endswith("のイラスト") and len(t) > len("のイラスト") else t
+
+
 def with_set_chunks(rebus, text, ms):
     """The rebus with each set phrase as its fixed chunk, replacing whatever the LLM anchored inside it."""
     placed, pos, last = [], 0, 0
@@ -254,17 +259,23 @@ def cmd_candidates(a):
             continue
         text = c["text"]
         senses = {}
-        for lemma, s in (r.get("senses") or {}).items():
+        for lemma, s in (r.get("s") or r.get("senses") or {}).items():
+            if isinstance(s, list) and len(s) == 2:  # compact [sense, emoji]
+                s = {"sense": s[0], "emoji": s[1]}
             if lemma in c["words"] and isinstance(s, dict):
                 senses[lemma] = {"sense": s.get("sense") or "", "emoji": clean_emoji(s.get("emoji"))}
         rebus = []
-        for ch in r.get("rebus") or []:
+        for ch in r.get("r") or r.get("rebus") or []:
             if isinstance(ch, list) and len(ch) == 2 and clean_emoji(ch[0]):
                 ok = isinstance(ch[1], str) and ch[1] in text
                 n_bad += not ok
                 rebus.append([clean_emoji(ch[0]), ch[1] if ok else ""])
-        queries = [{"q": q["q"], "anchor": q.get("anchor") if q.get("anchor") in text else ""}
-                   for q in r.get("queries") or [] if isinstance(q, dict) and isinstance(q.get("q"), str)]
+        queries = []
+        for q in r.get("q") or r.get("queries") or []:
+            if isinstance(q, list) and len(q) == 2:  # compact [word, anchor]
+                q = {"q": q[0], "anchor": q[1]}
+            if isinstance(q, dict) and isinstance(q.get("q"), str):
+                queries.append({"q": q["q"], "anchor": q.get("anchor") if q.get("anchor") in text else ""})
         ms = sets.get(str(cid), [])
         if ms:  # set phrases win over the LLM's take on the same words
             senses = {lm: s for lm, s in senses.items() if not inside(c["words"][lm][1], ms, len(c["words"][lm][0]))}
@@ -291,12 +302,12 @@ def cmd_candidates(a):
             cand = search.get(lemma)
             if cand:
                 items.append({"id": f"w{len(items)}", "line": cues[cid]["text"], "target": lemma, "sense": s["sense"],
-                              "candidates": [x["title"] for x in cand]})
+                              "candidates": [short_title(x["title"]) for x in cand]})
         for n, q in enumerate(p["queries"]):
             cand = search.get(q["q"])
             if cand:
                 items.append({"id": f"v{cid}_{n}", "line": cues[cid]["text"], "target": q["q"],
-                              "candidates": [x["title"] for x in cand]})
+                              "candidates": [short_title(x["title"]) for x in cand]})
     jdump(search, os.path.join(build, "search.json"))
     jdump(items, os.path.join(build, "items.json"))
     files = write_prompts(build, "B", PROMPT_B, [items[i:i + a.chunk] for i in range(0, len(items), a.chunk)])
