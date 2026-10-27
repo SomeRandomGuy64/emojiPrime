@@ -61,22 +61,41 @@ def transcribe(video, out, model_name):
 # ---------- tokens ----------
 
 def tokenize(srt):
-    """Cues with their content words: {lemma: [surface, char offset in the cue's text]}."""
+    """Cues with their content words, {lemma: [surface, char offset in the cue's text]}, and token boundaries."""
     import fugashi
     tagger = fugashi.Tagger()
     cues = read_srt(srt)
     for c in cues:
-        words, pos = {}, 0
+        words, pos, bounds = {}, 0, {0, len(c["text"])}
         for w in tagger(c["text"]):
             at = c["text"].find(w.surface, pos)
             if at >= 0:
                 pos = at + len(w.surface)
+                bounds |= {at, pos}
             f = w.feature
             lemma = (getattr(f, "lemma", None) or w.surface).split("-")[0]  # ケーブル-cable -> ケーブル
             if f.pos1 not in CONTENT_POS or f.pos2 in SKIP_POS2 or lemma in STOP or at < 0:
                 continue
             words.setdefault(lemma, [w.surface, at])
-        c["words"] = words
+        c["words"], c["bounds"] = words, sorted(bounds)
+    return cues
+
+
+def add_bounds(cues):
+    """Token boundaries for cues tokenized before they were recorded."""
+    import fugashi
+    tagger = None
+    for c in cues:
+        if "bounds" in c or not c["text"]:
+            continue
+        tagger = tagger or fugashi.Tagger()
+        bounds, pos = {0, len(c["text"])}, 0
+        for w in tagger(c["text"]):
+            at = c["text"].find(w.surface, pos)
+            if at >= 0:
+                pos = at + len(w.surface)
+                bounds |= {at, pos}
+        c["bounds"] = sorted(bounds)
     return cues
 
 

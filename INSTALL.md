@@ -31,7 +31,7 @@ Check each one, and install only what's missing:
 - **Python 3.9+** packages from `skill/emoji-prime/requirements.txt`: `fugashi`, `unidic-lite`, `pillow`, `numpy`, `stable-ts`. Check with `pip show`, then `pip install -r <skills dir>/emoji-prime/requirements.txt`. If the user's Python is externally managed (PEP 668), use their usual approach (a venv, `pipx`, or `--user`) and ask if unsure.
 - `stable-ts` pulls in PyTorch, which is a big download. If the machine has an NVIDIA GPU (`nvidia-smi` works), a CUDA build of torch makes word alignment about 10× faster. Mention this, and if the user wants it, install the CUDA build that matches their driver.
 
-Check it works: `python3 <skills dir>/emoji-prime/scripts/emoji_prime.py catalog --search 猫` should print a few いらすとや titles.
+Check it works: `python3 <skills dir>/emoji-prime/scripts/emoji_prime.py catalog --search 猫` should print a few いらすとや titles. This asks the emoji-prime server at api.fazon.nexus, which holds the picture catalog, so it needs internet.
 
 ## 3. mpv script (ask first)
 

@@ -1,0 +1,105 @@
+# Prebaked set phrases: fixed emoji so every video shows these the same way.
+# Made Emoji Dick style: 3 independent translations (prompts/phrase_translate.md), then a blind vote (prompts/phrase_vote.md).
+# phrase	other forms (|)	emoji	Japanese gloss	English (maintainers only, never shown)
+先週	せんしゅう	⏪🗓️	この前の週	last week
+今週	こんしゅう	👇🗓️	この週	this week
+来週	らいしゅう	⏩🗓️	次の週	next week
+先月	せんげつ	⏪🌙	前の月	last month
+今月	こんげつ	👇🌙	この月	this month
+来月	らいげつ	⏩🌙	次の月	next month
+去年	きょねん|昨年|さくねん	⏪🎍	前の年	last year
+今年	ことし	👇🎍	この年	this year
+来年	らいねん	⏩🎍	次の年	next year
+一昨日	おととい|おとつい	⏪⏪☀️	昨日の前の日	the day before yesterday
+昨日	きのう	⏪☀️	今日の前の日	yesterday
+今日	きょう	👇☀️	この日	today
+明日	あした|あす	⏩☀️	今日の次の日	tomorrow
+明後日	あさって	⏩⏩☀️	明日の次の日	the day after tomorrow
+今朝	けさ	👇🌅	今日の朝	this morning
+今夜	こんや|今晩|こんばん	👇🌃	今日の夜	tonight
+毎日	まいにち	🔁☀️	日ごと	every day
+毎週	まいしゅう	🔁🗓️	週ごと	every week
+毎朝	まいあさ	🔁🌅	朝ごと	every morning
+毎晩	まいばん	🔁🌃	夜ごと	every night
+最近	さいきん	⏪🤏	近ごろ	lately
+この前	このまえ|こないだ|この間	⏪👈	少し前のある時	the other day
+さっき	先程|さきほど	⏪⏱️	少し前	a moment ago
+後で	あとで	⏩⏱️	少したってから	later
+今から	いまから	👇▶️	ここから先すぐ	starting now
+これから		👇⏩	今から先	from now on
+久しぶり	ひさしぶり|久々|ひさびさ|お久しぶり|おひさしぶり	🤝⏳	長い間をおいて	it's been a while
+いつも		♾️🔁	どんな時も	always
+たまに		🔁🤏	ときどき少し	once in a while
+ずっと		➡️♾️	長い間続けて	all along
+もうすぐ	まもなく|間もなく	⏩🤏	少しで	soon
+初めて	はじめて	☝️✨	一回目	for the first time
+もう一回	もういっかい|もう一度|もういちど|もっかい	🔄☝️	また一度	one more time
+おはよう	おはようございます|おはよ|おはようさん	🌅👋	朝のあいさつ	good morning
+こんにちは	こんにちわ	☀️👋	昼のあいさつ	hello
+こんばんは	こんばんわ	🌃👋	夜のあいさつ	good evening
+おやすみ	おやすみなさい	😴🌙	寝る前のあいさつ	good night
+はじめまして	初めまして	🤝✨	初めて会うあいさつ	nice to meet you
+さようなら	さよなら|バイバイ|ばいばい	👋🚪	別れのあいさつ	goodbye
+またね	じゃあね|ほなね|ほなまた|じゃあまた|またな	👋⏩	また会おうというあいさつ	see you
+ありがとう	ありがとうございます|ありがとうございました|有難う|ありがと|サンキュー|おおきに	🙏😊	感謝	thank you
+すみません	すいません|すんません|すまん|すまない	🙇😓	すまない気持ち	excuse me / sorry
+ごめん	ごめんなさい|ごめんね|ごめんな|堪忍|かんにん	🙇😢	謝る	sorry
+いただきます	頂きます	🙏🍚	食べる前のあいさつ	(before eating)
+ごちそうさま	ごちそうさまでした|ご馳走様|ご馳走様でした|ごちそうさん	🙏😋	食べた後のあいさつ	(after eating)
+お疲れ様	お疲れさま|おつかれさま|お疲れ様です|お疲れ様でした|おつかれ|お疲れ	🙇💦	ねぎらいのあいさつ	good work / thanks for your effort
+よろしく	よろしくお願いします|よろしくお願いいたします|宜しく|よろしゅう	🤝🙇	これからの関係を頼むあいさつ	please treat me well
+お願いします	お願い|おねがい|おねがいします|お願いいたします	🙏🥺	たのむ	please
+ただいま		🏠🚶	帰ったときのあいさつ	I'm home
+おかえり	おかえりなさい|お帰り|お帰りなさい	🏠🤗	帰った人へのあいさつ	welcome home
+いってきます	行ってきます|いってくる|行ってくる	🚪🚶	出かけるときのあいさつ	I'm off
+いってらっしゃい	行ってらっしゃい	👋🚶	出かける人へのあいさつ	see you later (to someone leaving)
+いらっしゃいませ	いらっしゃい	🏪🙇	店に来た客へのあいさつ	welcome (shop)
+おめでとう	おめでとうございます	🎉👏	祝う	congratulations
+誕生日おめでとう	お誕生日おめでとう|お誕生日おめでとうございます|誕生日おめでとうございます	🎂🎉	生まれた日を祝う	happy birthday
+あけましておめでとう	あけましておめでとうございます|明けましておめでとう|明けましておめでとうございます|あけおめ	🎍🎉	新しい年を祝う	happy new year
+メリークリスマス		🎄🎅	クリスマスを祝う	merry Christmas
+乾杯	かんぱい	🍻	グラスを合わせて祝う	cheers
+お大事に	おだいじに|お大事にしてください	🤒💐	病気の人を気づかう	get well soon
+どういたしまして		🙏😊	お礼への返事	you're welcome
+どうぞ		🫴😊	相手にすすめる	go ahead / here you are
+失礼します	失礼しました|しつれいします	🙇🚪	場を離れるときなどのあいさつ	excuse me (leaving)
+お邪魔します	おじゃまします|お邪魔しました|おじゃましました	🏠🙇	人の家に入るときのあいさつ	sorry to intrude
+もしもし		📞👋	電話のあいさつ	hello (phone)
+おかげさまで	お陰様で	🙏👉	人のおかげだという感謝	thanks to you
+いいね	ええやん|いいじゃん|ええな	👍	よいと認める	nice / sounds good
+なるほど	なるほどね|成程	💡😌	わかって納得する	I see
+そうなんだ	そうなんや|そうなんですね|そうなんですか|そうなん|そうなんか	😮👂	新しく知って受け止める	oh, is that so
+せやな	せやね|そうだね|そうやな|そうですね|そやな|せやなあ	😊👍	同意する	yeah, right
+本当に	ほんとに|ほんまに|本当|ほんと|ほんま|ホンマ	✅💯	うそではなく	really
+マジで	まじで|マジ|まじ	💯❗	本気で、うそではなく	seriously
+嘘でしょ	うそでしょ|嘘やん|うそやん|嘘だろ|うそだろ|うそ	😱🚫	信じられない	no way
+やばい	ヤバい|やば|ヤバ|やべえ|やべー|ヤバイ	😱🔥	とんでもない	oh no / insane
+大丈夫	だいじょうぶ|大丈夫です|だいじょぶ	👌😊	問題ない	it's fine / are you OK
+仕方ない	しかたない|しょうがない|しゃあない|しゃーない|しょうがねえ	🤷😔	どうにもできない	it can't be helped
+ちょっと待って	ちょっと待て|ちょっとまって|待って|まって|待て|ちょい待ち	✋⏳	少しのあいだ止まって	wait a moment
+どういうこと	どういうことや|どういうこっちゃ|どういうことですか|どゆこと	🤔❓	意味がわからない	what do you mean
+なんでやねん	なんでだよ|何でやねん	👋😤❓	おかしいとつっこむ	why on earth (tsukkomi)
+なにこれ	何これ|なんやこれ|何だこれ|なんだこれ|なにこれ	👉❓	これは何だ	what is this
+どうした	どうしたの|どないしたん|どうしたん|どうしたんですか|どうしました	😟❓	何があったのか	what's wrong
+どうしよう	どうしよ|どないしよ|どないしよう	😰🤔	困って迷う	what do I do
+だめ	ダメ|駄目|あかん|アカン|だめだめ|ダメダメ	🙅❌	よくない、してはいけない	no good / no
+違う違う	ちがうちがう|ちゃうちゃう|ちゃうで|ちゃうよ|違うよ|ちゃいます|ちゃうねん	🙅‍♂️🙅‍♂️	そうではないと打ち消す	no, no / that's not it
+分かった	わかった|分かりました|わかりました|了解|りょうかい|オッケー|オーケー	💡👌	理解して受け入れる	got it / OK
+分からない	わからない|分かんない|わかんない|わからん|分からん|分かりません|わかりません	🤷❓	知らない	I don't know
+もちろん	勿論	👍💯	言うまでもなく	of course
+よかった	良かった|よかったね|良かったね|よかったわ	😌💖	安心する	thank goodness / glad
+頑張って	がんばって|頑張れ|がんばれ|頑張ろう|がんばろう|頑張ります|がんばります	💪🔥	力をつくして	good luck / do your best
+気をつけて	気を付けて|きをつけて|気をつけてね	⚠️👀	注意して	take care
+助けて	たすけて|助けてくれ	🚨🙏	救ってほしい	help!
+危ない	あぶない|危ねえ|あぶねえ	⚠️😨	けがをしそう	watch out
+お腹すいた	お腹空いた|おなかすいた|腹減った|はらへった|お腹減った	🍙😫	食べたい	I'm hungry
+やったー	やった〜|よっしゃ|よっしゃー|やりー	🙌🎉	うまくいって喜ぶ	yay / yes!
+ドンマイ		🫶😊	気にするな	never mind / don't worry about it
+いいよ	いいですよ|ええよ|いいぜ	👌😊	許す、かまわない	sure / it's OK
+ちなみに		➕💬	ついでに言うと	by the way
+とりあえず	取り敢えず|取りあえず	👇☝️	まず今は	for now
+要するに	つまり	📦💬	まとめると	in short
+やっぱり	やっぱ|やはり|やっぱし	😌👍	思った通り	as expected / after all
+確かに	たしかに	👍🎯	その通りだ	true / indeed
+さすが	流石|さすがに	👏✨	評判通りすごい	as expected of you
+もしかして	ひょっとして|もしかしたら	🤔💭	ひょっとすると	could it be
