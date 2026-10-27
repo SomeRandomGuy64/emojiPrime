@@ -333,8 +333,8 @@ def cmd_build(a):
         cand = search.get(it["target"], [])
         if not isinstance(idx, int) or not 0 <= idx < len(cand):
             continue
-        try:
-            path = IR.fetch_image(cand[idx]["img"])
+        try:  # web-only: the browser loads it by URL, so there's nothing to download
+            path = cand[idx]["img"] if a.web_only else IR.fetch_image(cand[idx]["img"])
         except Exception as e:
             log(f"download failed for {it['target']} ({e})")
             continue
@@ -373,7 +373,12 @@ def cmd_build(a):
             else:
                 M.place(cuesp, video, os.path.join(build, "placement.json"))
     align, place = jload(os.path.join(build, "align.json")), jload(os.path.join(build, "placement.json"))
-    O.build(cues, align, place, plan, work, pre=a.pre, stay=a.stay, youtube=a.youtube or st.get("youtube"))
+    O.build(cues, align, place, plan, work, pre=a.pre, stay=a.stay, youtube=a.youtube or st.get("youtube"),
+            web_only=a.web_only)
+    if a.web_only:
+        print(f"\nweb pack: {os.path.join(work, 'web.json')}")
+        print("  load it from the YouTube Emoji Prime panel on the video's page")
+        return
     auto_dir = os.path.join(os.path.dirname(video), os.path.splitext(os.path.basename(video))[0] + ".emojiprime")
     print("\nwatch it:")
     if os.path.abspath(work) == auto_dir:
@@ -493,6 +498,9 @@ def main():
     pa.add_argument("--chunk", type=int, default=CHUNK_A)
     pbuild = video_cmd("build", cmd_build)
     pbuild.add_argument("--youtube", help="YouTube video id for web.json (default: the one given to prepare)")
+    pbuild.add_argument("--web-only", action="store_true",
+                        help="just web.json for the browser extension: no downloads, no mpv overlay (much faster)")
+    pa.set_defaults(web_only=False)
     for p in (pbuild, pa):
         p.add_argument("--pre", type=float, default=0.1, help="show pictures this early (s)")
         p.add_argument("--stay", type=float, default=1.0, help="keep pictures up this long after the word (s)")
