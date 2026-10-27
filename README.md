@@ -118,6 +118,7 @@ Irasutoya's illustrations are free for personal use under [their terms](https://
 | [`INSTALL.md`](INSTALL.md) | install steps written for an AI agent |
 | [`skill/emoji-prime/`](skill/emoji-prime) | the skill: copy this folder into your skills folder |
 | ├ `SKILL.md` | the workflow the agent follows |
+| ├ `agents/emoji-prime-answerer.md` | lean Read/Write subagent for answering the prompts (Claude Code: copy to `~/.claude/agents/`) |
 | ├ `scripts/emoji_prime.py` | the CLI: `prepare` / `candidates` / `build` / `auto` / `status` / `catalog` |
 | ├ `scripts/ep_media.py` | subtitles, tokenizing (fugashi), Whisper alignment, placement scoring |
 | ├ `scripts/ep_overlay.py` | timing and layout → `overlay.json`, images and `web.json` |
