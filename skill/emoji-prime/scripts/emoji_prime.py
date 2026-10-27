@@ -6,7 +6,8 @@
     emoji_prime.py build      VIDEO        (after the B_*.md prompts are answered)
     emoji_prime.py auto       VIDEO --llm claude|openrouter [--model M] [--jobs 4]
     emoji_prime.py status     VIDEO
-    emoji_prime.py catalog    [--refresh] [--search WORD ...] [-n 8]
+    emoji_prime.py catalog    --search WORD ... [-n 8]
+    emoji_prime.py phrases    [WORD]
 
 Output goes to <video dir>/<video stem>.emojiprime/ (overlay.json + img/), which emoji_prime.lua picks up
 automatically; working files are in its _build/ folder. Every step resumes from what's already there.
@@ -21,23 +22,26 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from ep_common import clean_emoji, jdump, jload, log  # noqa: E402
+import ep_api as API  # noqa: E402
 import ep_irasutoya as IR  # noqa: E402
 
-CHUNK_A, CHUNK_B, N_CAND = 40, 60, 8
+CHUNK_A, CHUNK_B, N_CAND = 120, 400, 8  # big chunks: each prompt costs a fixed agent overhead
 LUA = os.path.join(os.path.dirname(HERE), "mpv", "emoji_prime.lua")
 
 PROMPT_A = """You are annotating a Japanese video for "emoji prime": pictures pop up over the video as words are spoken, so a Japanese learner understands WITHOUT any English.
 
 For every cue in the JSON below (text = the spoken line with spaces removed; words = its content words as dictionary forms), produce:
 
-1. "senses": for EVERY listed word, {"sense": a short Japanese monolingual gloss of the sense used IN THIS LINE, "emoji": 1-3 emoji picturing that sense, or null}. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
-2. "rebus": 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
-3. "queries": 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as {"q": word, "anchor": exact substring of the text}. Use [] for cries, interjection-only and name-only lines.
+1. "s" (senses): for EVERY listed word, [sense, emoji]: sense = a very short Japanese monolingual gloss (2-8 characters) of the sense used IN THIS LINE; emoji = 1-3 emoji picturing that sense, or null. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
+2. "r" (rebus): 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
+3. "q" (queries): 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as [word, anchor], anchor = exact substring of the text. Use [] for cries, interjection-only and name-only lines.
+
+4. Some cues have "set": prebaked set phrases with fixed emoji, as [emoji, the phrase as written in the text]. Put each one into the rebus exactly as given (that emoji, anchored to that phrase), and don't express it again with other emoji. The words inside a set phrase aren't listed, so they need no senses.
 
 Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 📅 🔟, keycaps and the like) or flags. No English anywhere.
 
 Answer with ONLY a JSON object, no prose and no code fences:
-{"<cue>": {"senses": {"<word>": {"sense": "...", "emoji": "..."}}, "rebus": [["😱", "わあ"], ...], "queries": [{"q": "...", "anchor": "..."}]}, ...}
+{"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": [["😱", "わあ"], ...], "q": [["<word>", "<anchor>"]]}, ...}
 with every cue id.
 
 Cues:
@@ -45,7 +49,7 @@ Cues:
 
 PROMPT_B = """Pick Irasutoya illustrations for "emoji prime" (pictures over a Japanese video that convey meaning without English).
 
-For each item below you get the spoken Japanese line, the word or idea to picture ("target"; for words also the sense used in that line), and numbered candidate illustration titles (0-based). Return the index of the candidate that most clearly depicts that meaning AS USED IN THE LINE, or null if none really fits. Prefer simple, readable pictures of the thing or action itself; reject pictures of a different sense, and anything whose title suggests text or lettering (イラスト文字, 文字, ロゴ, 看板 with words).
+For each item below you get the spoken Japanese line, the word or idea to picture ("target"; for words also the sense used in that line), and numbered candidate illustration titles (0-based; the usual 「のイラスト」 ending is left off). Return the index of the candidate that most clearly depicts that meaning AS USED IN THE LINE, or null if none really fits. Prefer simple, readable pictures of the thing or action itself; reject pictures of a different sense, and anything whose title suggests text or lettering (イラスト文字, 文字, ロゴ, 看板 with words).
 
 Answer with ONLY a JSON object, no prose and no code fences: {"<id>": index or null, ...} with every id.
 
@@ -123,10 +127,14 @@ def cmd_prepare(a):
     if not os.path.exists(cues_path):
         jdump(M.tokenize(subs), cues_path)
     cues = jload(cues_path)
+    if any("bounds" not in c for c in cues if c["text"]):
+        jdump(M.add_bounds(cues), cues_path)
     spoken = [c for c in cues if c["text"]]
+    sets = load_phrases(build, cues)
     jdump({"video": video, "work": work, "subs": subs, "whisper_model": a.whisper_model, "youtube": a.youtube},
           os.path.join(build, "state.json"))
-    log(f"{len(spoken)} spoken cues, {sum(len(c['words']) for c in spoken)} content words")
+    log(f"{len(spoken)} spoken cues, {sum(len(c['words']) for c in spoken)} content words, "
+        f"{sum(len(m) for m in sets.values())} set phrases")
     words = a.word_times
     if not words and os.path.exists(os.path.splitext(video)[0] + ".soniox.json"):
         words = os.path.splitext(video)[0] + ".soniox.json"
@@ -135,13 +143,56 @@ def cmd_prepare(a):
         log(f"word timings from {words}: {n}/{total} cues matched"
             + ("" if n == total else "; Whisper aligns the rest in the background"))
     start_background(build)
-    chunks = [[{"cue": c["cue"], "speaker": c["speaker"], "text": c["text"], "words": list(c["words"])}
-               for c in spoken[i:i + a.chunk]] for i in range(0, len(spoken), a.chunk)]
+    chunks = [[a_entry(c, sets.get(str(c["cue"]), [])) for c in spoken[i:i + a.chunk]]
+              for i in range(0, len(spoken), a.chunk)]
     files = write_prompts(build, "A", PROMPT_A, chunks)
     print(f"\n{len(files)} prompt(s) to answer (step A):")
     for md, out in files:
         print(f"  {md}\n    -> {out}")
     print(f"\nthen: {next_cmd('candidates', video, a.out)}")
+
+
+def load_phrases(build, cues):
+    """Set-phrase matches per cue, found once and kept in _build/phrases.json (the phrase list is fetched from
+    the server, or its cached copy)."""
+    path = os.path.join(build, "phrases.json")
+    if not os.path.exists(path):
+        import ep_media as M
+        jdump(API.match_phrases(M.add_bounds([c for c in cues if c["text"]]), API.phrases()), path)
+    return jload(path)
+
+
+def inside(off, ms, length=1):
+    return any(off < m["end"] and off + max(length, 1) > m["start"] for m in ms)
+
+
+def a_entry(c, ms):
+    """A cue as step A sees it. Words inside a set phrase are left out: the phrase covers them."""
+    e = {"cue": c["cue"], "speaker": c["speaker"], "text": c["text"],
+         "words": [w for w, (_, off) in c["words"].items() if not inside(off, ms)]}
+    if ms:
+        e["set"] = [[m["emoji"], m["form"]] for m in ms]
+    return e
+
+
+def short_title(t):
+    """Candidate titles for step B, minus the のイラスト that nearly all of them end with (saves tokens)."""
+    return t[:-len("のイラスト")] if t.endswith("のイラスト") and len(t) > len("のイラスト") else t
+
+
+def with_set_chunks(rebus, text, ms):
+    """The rebus with each set phrase as its fixed chunk, replacing whatever the LLM anchored inside it."""
+    placed, pos, last = [], 0, 0
+    for n, (emoji, anc) in enumerate(rebus):
+        at = text.find(anc, pos) if anc else -1
+        if at < 0 and anc:
+            at = text.find(anc)
+        if at >= 0:
+            pos = last = at
+        if at < 0 or not inside(at, ms, len(anc)):
+            placed.append((at if at >= 0 else last, n, [emoji, anc]))
+    placed += [(m["start"], -1, [clean_emoji(m["emoji"]), m["form"]]) for m in ms]
+    return [ch for _, _, ch in sorted(placed, key=lambda x: (x[0], x[1]))]
 
 
 def start_background(build):
@@ -197,7 +248,9 @@ def cmd_bg(a):
 def cmd_candidates(a):
     video, work, build = paths(a.video, a.out)
     load_state(build)
-    cues = {str(c["cue"]): c for c in jload(os.path.join(build, "cues.json"))}
+    cue_list = jload(os.path.join(build, "cues.json"))
+    cues = {str(c["cue"]): c for c in cue_list}
+    sets = load_phrases(build, cue_list)
     A = read_answers(build, "A")
     plan, n_bad = {}, 0
     for cid, r in A.items():
@@ -206,17 +259,30 @@ def cmd_candidates(a):
             continue
         text = c["text"]
         senses = {}
-        for lemma, s in (r.get("senses") or {}).items():
+        for lemma, s in (r.get("s") or r.get("senses") or {}).items():
+            if isinstance(s, list) and len(s) == 2:  # compact [sense, emoji]
+                s = {"sense": s[0], "emoji": s[1]}
             if lemma in c["words"] and isinstance(s, dict):
                 senses[lemma] = {"sense": s.get("sense") or "", "emoji": clean_emoji(s.get("emoji"))}
         rebus = []
-        for ch in r.get("rebus") or []:
+        for ch in r.get("r") or r.get("rebus") or []:
             if isinstance(ch, list) and len(ch) == 2 and clean_emoji(ch[0]):
                 ok = isinstance(ch[1], str) and ch[1] in text
                 n_bad += not ok
                 rebus.append([clean_emoji(ch[0]), ch[1] if ok else ""])
-        queries = [{"q": q["q"], "anchor": q.get("anchor") if q.get("anchor") in text else ""}
-                   for q in r.get("queries") or [] if isinstance(q, dict) and isinstance(q.get("q"), str)]
+        queries = []
+        for q in r.get("q") or r.get("queries") or []:
+            if isinstance(q, list) and len(q) == 2:  # compact [word, anchor]
+                q = {"q": q[0], "anchor": q[1]}
+            if isinstance(q, dict) and isinstance(q.get("q"), str):
+                queries.append({"q": q["q"], "anchor": q.get("anchor") if q.get("anchor") in text else ""})
+        ms = sets.get(str(cid), [])
+        if ms:  # set phrases win over the LLM's take on the same words
+            senses = {lm: s for lm, s in senses.items() if not inside(c["words"][lm][1], ms, len(c["words"][lm][0]))}
+            for m in ms:
+                senses[m["phrase"]] = {"sense": m["gloss"], "emoji": clean_emoji(m["emoji"]), "set": [m["form"], m["start"]]}
+            rebus = with_set_chunks(rebus, text, ms)
+            queries = [q for q in queries if not (q["anchor"] and inside(text.find(q["anchor"]), ms, len(q["anchor"])))]
         plan[str(cid)] = {"senses": senses, "rebus": rebus, "queries": queries}
     missing = [k for k, c in cues.items() if c["text"] and k not in plan]
     if missing:
@@ -225,21 +291,23 @@ def cmd_candidates(a):
         log(f"{n_bad} rebus anchor(s) weren't substrings of their line; those emoji get approximate timing")
     jdump(plan, os.path.join(build, "plan_a.json"))
 
-    search, items, seen = {}, [], {}
+    wanted = [lm for p in plan.values() for lm, s in p["senses"].items() if s["emoji"] and not s.get("set")]
+    search = IR.search_many(wanted + [q["q"] for p in plan.values() for q in p["queries"]], N_CAND)
+    items, seen = [], {}
     for cid, p in plan.items():
         for lemma, s in p["senses"].items():
-            if not s["emoji"] or (lemma, s["sense"]) in seen:
-                continue
+            if not s["emoji"] or s.get("set") or (lemma, s["sense"]) in seen:
+                continue  # set phrases keep their fixed emoji, so they get no illustration
             seen[(lemma, s["sense"])] = True
-            cand = search.setdefault(lemma, IR.search(lemma, N_CAND))
+            cand = search.get(lemma)
             if cand:
                 items.append({"id": f"w{len(items)}", "line": cues[cid]["text"], "target": lemma, "sense": s["sense"],
-                              "candidates": [x["title"] for x in cand]})
+                              "candidates": [short_title(x["title"]) for x in cand]})
         for n, q in enumerate(p["queries"]):
-            cand = search.setdefault(q["q"], IR.search(q["q"], N_CAND))
+            cand = search.get(q["q"])
             if cand:
                 items.append({"id": f"v{cid}_{n}", "line": cues[cid]["text"], "target": q["q"],
-                              "candidates": [x["title"] for x in cand]})
+                              "candidates": [short_title(x["title"]) for x in cand]})
     jdump(search, os.path.join(build, "search.json"))
     jdump(items, os.path.join(build, "items.json"))
     files = write_prompts(build, "B", PROMPT_B, [items[i:i + a.chunk] for i in range(0, len(items), a.chunk)])
@@ -275,10 +343,12 @@ def cmd_build(a):
         else:
             cid, n = it["id"][1:].rsplit("_", 1)
             vlog.setdefault(cid, []).append((int(n), path, cand[idx]["title"], cand[idx]["img"]))
-    plan = {}
+    plan, by_id = {}, {str(c["cue"]): c for c in cues}
     for cid, p in plan_a.items():
         words = {}
         for lemma, s in p["senses"].items():
+            if s.get("set") and cid in by_id:
+                by_id[cid]["words"][lemma] = s["set"]
             if s["emoji"]:
                 img = word_img.get((lemma, s["sense"]))
                 words[lemma] = {"emoji": s["emoji"], "sense": s["sense"], "image": img[0] if img else None,
@@ -382,13 +452,18 @@ def cmd_auto(a):
 
 
 def cmd_catalog(a):
-    IR.fetch_catalog(force=a.refresh)
-    print(f"catalog: {IR.CATALOG if os.path.exists(IR.CATALOG) else IR.BUNDLED}")
-    for q in a.search or []:  # the same search the candidates step runs
-        hits = IR.search(q, n=a.n)
-        print(f"## {q} ({len(hits)} shown)")
-        for h in hits:
+    res = IR.search_many(a.search, a.n)  # the same search the candidates step runs
+    for q in a.search:
+        print(f"## {q} ({len(res.get(q, []))} shown)")
+        for h in res.get(q, []):
             print(f"{h['title']} | {h['img']}")
+
+
+def cmd_phrases(a):
+    for p in API.phrases():
+        if not a.word or any(a.word in f for f in [p["phrase"], *p.get("forms", [])]):
+            other = f" ({'|'.join(p['forms'])})" if p.get("forms") else ""
+            print(f"{p['phrase']}{other}\t{p['emoji']}\t{p.get('gloss', '')}")
 
 
 def main():
@@ -422,11 +497,13 @@ def main():
         p.add_argument("--pre", type=float, default=0.1, help="show pictures this early (s)")
         p.add_argument("--stay", type=float, default=1.0, help="keep pictures up this long after the word (s)")
     video_cmd("status", cmd_status)
-    pc = sub.add_parser("catalog")
-    pc.add_argument("--refresh", action="store_true", help="rebuild it from Irasutoya's feed (~8 min)")
-    pc.add_argument("--search", nargs="+", metavar="WORD", help="search it the way the candidates step does")
+    pc = sub.add_parser("catalog", help="search the Irasutoya catalog the way the candidates step does")
+    pc.add_argument("--search", nargs="+", metavar="WORD", required=True)
     pc.add_argument("-n", type=int, default=8, help="hits per search word")
     pc.set_defaults(fn=cmd_catalog)
+    pp = sub.add_parser("phrases", help="list the prebaked set phrases")
+    pp.add_argument("word", nargs="?", help="only phrases containing this")
+    pp.set_defaults(fn=cmd_phrases)
     pb = sub.add_parser("_bg")
     pb.add_argument("job", choices=["align", "place"])
     pb.add_argument("build")

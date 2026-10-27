@@ -5,6 +5,7 @@ Emoji prime shows pictures over a Japanese video at the moment each word is spok
 - **Word pictures:** an emoji or an [Irasutoya](https://www.irasutoya.com/) (いらすとや) illustration for each word, in the sense it has on that line. For example, 飲み込む (nomikomu, "swallow") said of a whirlpool gets 🌀, not 😋.
 - **Sentence illustrations:** one or two Irasutoya illustrations that carry the gist of a line.
 - **Sentence rebus:** a strip of emoji that builds up word by word, including grammar and tone: ❓ for questions, 🚫 for negation, 🙏 for wanting something. なに (nani, "what?") becomes 👂❓.
+- **Set phrases:** about 100 common phrases always get the same emoji, so they become a visual vocabulary. 先週 (senshuu, "last week") is always ⏪🗓️ and お疲れ様 (otsukaresama) is always 🙇💦. See [`phrases/`](phrases).
 
 The pictures are tilted, vlog-style stickers in the emptiest part of the frame. Each appears as its word starts and stays about a second after it ends. They play in **mpv** for local files, and in a **browser extension** for YouTube.
 
@@ -95,14 +96,18 @@ Image subtitles (PGS) can't be read. `--subs FILE` picks a file.
 
 If your subtitles came from a service with word timings (e.g. Soniox: `{"words": [{"text", "start", "end"}]}`), pass `--word-times FILE` or put it beside the video as `<stem>.soniox.json`. It replaces Whisper alignment for every line it can match.
 
-## The Irasutoya catalog
+## The Irasutoya catalog and the emoji-prime server
 
-[`skill/emoji-prime/data/irasutoya_catalog.json`](skill/emoji-prime/data/irasutoya_catalog.json) holds the title, description, labels and image link of all ~25,000 Irasutoya posts (snapshot from 2026-10-26). Picture candidates are searched in it locally, so the tool never hammers Irasutoya's search. It contains no images: each illustration is downloaded only when it's picked, into `~/.cache/emoji-prime/` (set `EMOJI_PRIME_CACHE` to move it).
+Picture candidates come from a catalog of all ~25,000 Irasutoya posts: titles, descriptions, labels and image links, but no images. The catalog lives on the emoji-prime server at `api.fazon.nexus`, so the skill stays small and nobody has to download it. The server refreshes it from Irasutoya's public feed every week and also serves the [set phrases](phrases).
+
+What the skill sends the server: the Japanese search words for picture candidates (dictionary-form words like 猫 or 驚く), and a request for the phrase list. Subtitles, lines and video files never leave your machine. Each picked illustration is downloaded straight from Irasutoya's image host into `~/.cache/emoji-prime/` (set `EMOJI_PRIME_CACHE` to move it). The phrase list is cached there too, so a run still works if the server is down. Only picture search needs it.
 
 ```bash
 python3 skill/emoji-prime/scripts/emoji_prime.py catalog --search 猫 驚く     # what the candidates step would find
-python3 skill/emoji-prime/scripts/emoji_prime.py catalog --refresh            # rebuild from Irasutoya's public feed (~8 min) into the cache
+python3 skill/emoji-prime/scripts/emoji_prime.py phrases 週                   # the set phrases containing 週
 ```
+
+`EMOJI_PRIME_API` points the skill at another server.
 
 Irasutoya's illustrations are free for personal use under [their terms](https://www.irasutoya.com/p/terms.html).
 
@@ -113,13 +118,15 @@ Irasutoya's illustrations are free for personal use under [their terms](https://
 | [`INSTALL.md`](INSTALL.md) | install steps written for an AI agent |
 | [`skill/emoji-prime/`](skill/emoji-prime) | the skill: copy this folder into your skills folder |
 | ├ `SKILL.md` | the workflow the agent follows |
+| ├ `agents/emoji-prime-answerer.md` | lean Read/Write subagent for answering the prompts (Claude Code: copy to `~/.claude/agents/`) |
 | ├ `scripts/emoji_prime.py` | the CLI: `prepare` / `candidates` / `build` / `auto` / `status` / `catalog` |
 | ├ `scripts/ep_media.py` | subtitles, tokenizing (fugashi), Whisper alignment, placement scoring |
 | ├ `scripts/ep_overlay.py` | timing and layout → `overlay.json`, images and `web.json` |
 | ├ `scripts/ep_common.py` | SRT reading, emoji rendering, the sticker look |
-| ├ `scripts/ep_irasutoya.py` | catalog search and refresh, illustration download |
-| ├ `mpv/emoji_prime.lua` | the mpv player script |
-| └ `data/irasutoya_catalog.json` | the offline Irasutoya catalog |
+| ├ `scripts/ep_irasutoya.py` | illustration download |
+| ├ `scripts/ep_api.py` | the emoji-prime server: catalog search, set phrases and their matching |
+| └ `mpv/emoji_prime.lua` | the mpv player script |
+| [`phrases/`](phrases) | the set phrases and the prompts used to make them |
 | [`extension/`](extension) | the YouTube extension: shared `src/`, one manifest per browser in `manifests/` |
 | [`build.py`](build.py) | packages the release zips into `dist/` |
 | [`extension/test/firefox_smoke.py`](extension/test/firefox_smoke.py) | headless Firefox smoke test on real YouTube |
@@ -132,11 +139,12 @@ Each video's output goes in `<stem>.emojiprime/` beside it. `overlay.json` and `
 python3 build.py      # dist/emoji-prime-skill.zip + dist/youtube-emoji-prime-<browser>.zip
 ```
 
-Bump `version` in `extension/manifests/*.json`, then attach the zips to a GitHub release. The zip names carry no version, so `releases/latest/download/<name>` links keep working.
+Bump `version` in `extension/manifests/*.json`, then attach the zips to a GitHub release. The zip names carry no version, so `releases/latest/download/<name>` links keep working. The server side (the catalog and phrases API) isn't released from here: it's part of fazond, the fazon.nexus backend.
 
 ## Credits
 
 - **Elliot DeBruyn** (MattvsJapan Immersion Dojo): the idea, and the push towards denser pictures.
+- **Fred Benenson's *Emoji Dick*** for the translate-three-times-then-vote method behind the set phrases.
 - **いらすとや** (Takashi Mifune) for the illustrations, and **Noto Color Emoji** for the emoji.
 - [fugashi](https://github.com/polm/fugashi) + UniDic for tokenizing, and [stable-ts](https://github.com/jianfch/stable-ts) / Whisper for word alignment.
 

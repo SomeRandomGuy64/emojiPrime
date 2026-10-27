@@ -41,20 +41,24 @@ emoji_prime.py prepare VIDEO
 
   Use `--subs FILE` to pick a file.
 - **Tokenizing:** it tokenizes with fugashi/UniDic.
+- **Set phrases:** it marks common set phrases (先週, お疲れ様, …) from the shared list on the emoji-prime server. These always get their fixed emoji, so the step-A prompts show them as `set` and the LLM builds the rest around them.
 - **Word timings:** if the subtitles came from a transcription service with word timings (e.g. Soniox), pass that JSON with `--word-times FILE` (`{"words": [{"text", "start", "end"}, ...]}`, or a bare list). A sidecar `<stem>.soniox.json` is picked up automatically. Lines are matched ignoring punctuation, and this replaces Whisper alignment. Any lines it can't match still go to Whisper.
 - **Background jobs:** it starts word alignment (Whisper, skipped when word timings matched every line) and placement scoring in the background. Alignment takes about 5–10 min per 20-min episode on a GPU, and much longer on CPU.
 - **Prompts:** it writes step-A prompts to `_build/llm/A_NN.md`.
 
 Output goes to `<video stem>.emojiprime/` next to the video. If that folder isn't writable, pass `--out DIR`.
 
-For long videos, bigger batches mean fewer subagents. `prepare --chunk 80` puts 80 cues in each prompt (the default is 40). For step B, `candidates --chunk 400` fits a 2-hour stream into about 7 prompts. For a YouTube video, also pass `--youtube VIDEO_ID` so the browser pack records which video it belongs to.
+Prompts are big on purpose: every subagent pays a fixed overhead, so fewer, larger prompts use far fewer tokens. The defaults are 120 cues per step-A prompt (`prepare --chunk`) and 400 items per step-B prompt (`candidates --chunk`), so a 90-minute stream is about 18 A prompts and 5 B prompts. For a YouTube video, also pass `--youtube VIDEO_ID` so the browser pack records which video it belongs to.
 
 ### 2. Answer the step-A prompts
 
 The output of `prepare` lists each `A_NN.md` with the `A_NN.json` it needs. Answer every prompt that has no `.json` yet:
 
-- **Preferred:** use subagents, up to about 5 in parallel. A fast model at low effort is enough, e.g. Sonnet. Give each one exactly this, with no paraphrase:
-  `Read <A_NN.md path> and do what it asks. Write only the JSON object (no prose, no code fences) to the path given in its first line. Reply only "done".`
+- **Preferred:** one subagent **per prompt**, at most 3 running at once. Don't give one subagent several prompts: each turn resends everything before it, so the cost grows faster than the work.
+  - Use the `emoji-prime-answerer` agent type if it's installed. It has only Read and Write, so it carries far less overhead than a general-purpose agent. The install copies `agents/emoji-prime-answerer.md` into `~/.claude/agents/`. If it isn't installed, use a general-purpose agent with model `sonnet`.
+  - Step A needs Sonnet (the agent's default).
+  - Give each one exactly this, with no paraphrase:
+    `Read <A_NN.md path> and do what it asks. Write only the JSON object (no prose, no code fences) to the path given in its first line. Reply only "done".`
 - **Without subagents:** read each prompt yourself and write its JSON file.
 - Don't edit the prompts. Each one is self-contained: senses and emoji per word, a rebus anchored to the words, and illustration search words.
 
@@ -64,7 +68,7 @@ The output of `prepare` lists each `A_NN.md` with the `A_NN.json` it needs. Answ
 emoji_prime.py candidates VIDEO
 ```
 
-This checks the A answers and lists any prompt that is still missing an answer. It then searches the bundled offline Irasutoya catalog and writes `_build/llm/B_NN.md` (picking illustrations). Answer those exactly like step 2.
+This checks the A answers and lists any prompt that is still missing an answer. It then searches the Irasutoya catalog on the emoji-prime server (api.fazon.nexus; only the search words are sent) and writes `_build/llm/B_NN.md` (picking illustrations). Answer those like step 2, but with model `haiku`: picking a title by index is easy, and Haiku costs much less of the user's usage.
 
 ### 4. Build
 
@@ -128,5 +132,6 @@ Only use `auto` when the user asks for it, because it spends their usage.
 
 - The idea is Elliot DeBruyn's, from the MattvsJapan Immersion Dojo.
 - Japanese only. Any video works if it has Japanese speech: anime, YouTube, drama.
-- Irasutoya (いらすとや) illustrations are free for personal use. The tool downloads each one only when it's picked, and doesn't redistribute anything. The bundled `data/irasutoya_catalog.json` (titles and image links, 2026-10-26) can be refreshed with `emoji_prime.py catalog --refresh` (about 8 min). `emoji_prime.py catalog --search WORD` shows what the candidates step would find for a word.
+- Irasutoya (いらすとや) illustrations are free for personal use. The tool downloads each one only when it's picked, and doesn't redistribute anything. The catalog (titles and image links) lives on the emoji-prime server. `emoji_prime.py catalog --search WORD` shows what the candidates step would find for a word, and `emoji_prime.py phrases [WORD]` lists the set phrases.
+- To add set phrases, follow `phrases/README.md` in the emojiPrime repo: three independent emoji translations, a blind vote, then a PR to `phrases/phrases.tsv`. The server picks up merged phrases within an hour.
 - If alignment fails on a line, that line's pictures fall back to timings spread evenly across it.
