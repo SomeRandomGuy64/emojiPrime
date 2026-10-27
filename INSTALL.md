@@ -47,7 +47,7 @@ It does nothing for videos that have no `<stem>.emojiprime/` folder beside them.
 The extension plays the same pictures over the YouTube upload of a video. Ask whether the user wants it, and which browser.
 
 - **Chrome / Chromium / Edge / Brave:** download https://github.com/SomeRandomGuy64/emojiPrime/releases/latest/download/youtube-emoji-prime-chrome.zip and unzip it to a permanent folder (e.g. `~/emojiPrime-extension`; Chrome loads it from there every time). Then tell the user to open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder. You can't click through the browser for them.
-- **Firefox:** not released yet. Tell the user it's in progress.
+- **Firefox (beta, unsigned):** this needs the clone. Run `python3 <clone>/build.py firefox`, then tell the user to open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and pick `<clone>/dist/firefox/manifest.json`. Warn them that a temporary add-on, and the packs stored in it, is removed when Firefox closes. If they use Firefox Developer Edition, Nightly or ESR, they can install it permanently instead: see the Firefox section of the README.
 
 ## 5. Tell the user how to use it
 

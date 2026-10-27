@@ -74,7 +74,14 @@ Shift+E toggles the pictures. If you copy `emoji_prime.lua` into your mpv script
 2. Click **Load web.json pack…** and choose the pack. It's saved for that video, so it loads by itself next time.
 3. **Shift+E** toggles the pictures. **Sync offset** shifts them in time if the upload is trimmed differently from your file, and **Size** scales them.
 
-**Firefox** support is in progress.
+**Firefox (beta)**
+
+The Firefox version runs the same code as the Chrome one and has passed a smoke test on YouTube. It isn't signed by Mozilla yet, and release Firefox only keeps signed add-ons installed, so for now:
+
+1. In a clone of this repo, run `python3 build.py firefox`.
+2. Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and pick `dist/firefox/manifest.json`.
+
+A temporary add-on is removed when Firefox closes. Packs you loaded are stored with it and go too, so keep your `web.json` files. On Firefox Developer Edition, Nightly or ESR you can set `xpinstall.signatures.required` to `false` in `about:config` and install `dist/youtube-emoji-prime-firefox.zip` permanently from `about:addons` → ⚙ → **Install Add-on From File…**.
 
 ## Subtitles and timings
 
@@ -115,6 +122,7 @@ Irasutoya's illustrations are free for personal use under [their terms](https://
 | └ `data/irasutoya_catalog.json` | the offline Irasutoya catalog |
 | [`extension/`](extension) | the YouTube extension: shared `src/`, one manifest per browser in `manifests/` |
 | [`build.py`](build.py) | packages the release zips into `dist/` |
+| [`extension/test/firefox_smoke.py`](extension/test/firefox_smoke.py) | headless Firefox smoke test on real YouTube |
 
 Each video's output goes in `<stem>.emojiprime/` beside it. `overlay.json` and `img/` are what mpv plays, `web.json` is the browser pack, and `_build/` holds working files, so every step resumes from where it stopped.
 
