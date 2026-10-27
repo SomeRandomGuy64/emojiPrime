@@ -37,12 +37,17 @@ def jdump(obj, path):
 
 
 def download(url, dest):
-    if not os.path.exists(dest):
+    # an empty file is what a crash or power cut leaves behind: fetch it again
+    if not os.path.exists(dest) or os.path.getsize(dest) == 0:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         data = urllib.request.urlopen(req, timeout=120).read()
+        if not data:
+            raise OSError(f"empty download: {url}")
         with open(dest + ".part", "wb") as f:
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())  # data on disk before the rename, so a crash can't leave an empty file
         os.replace(dest + ".part", dest)
     return dest
 

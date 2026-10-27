@@ -15,7 +15,7 @@ DIR = os.path.join(CACHE, "irasutoya")
 
 def fetch_image(url):
     dest = os.path.join(DIR, "img", os.path.basename(url.split("?")[0]))
-    if not os.path.exists(dest):
+    if not os.path.exists(dest) or os.path.getsize(dest) == 0:
         download(url, dest)
         time.sleep(0.3)
     return dest
