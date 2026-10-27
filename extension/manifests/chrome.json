@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Emoji Prime",
+  "version": "1.0.0",
+  "description": "Shows emoji and Irasutoya pictures over a YouTube video as each Japanese word is spoken (no English). Load a web.json pack made by the emoji-prime skill.",
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": ["https://blogger.googleusercontent.com/*", "https://*.bp.blogspot.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

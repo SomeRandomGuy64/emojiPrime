@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><title>mock player</title>
+<link rel="stylesheet" href="../src/panel.css">
+<style>body{margin:0;background:#111} #movie_player{position:relative;width:960px;height:540px;background:#000} video{width:100%;height:100%;object-fit:contain}</style>
+</head><body>
+<div id="movie_player" class="html5-video-player"><video src="clip.mp4" muted playsinline></video></div>
+<script src="pack.js"></script>
+<script>
+  const data = { "pack:test": { pack: window.__pack, name: "test web.json" }, "offset:test": 0 };
+  window.chrome = {
+    storage: { local: {
+      get(keys, cb) { const r = {}; for (const k of [].concat(keys)) if (k in data) r[k] = data[k]; setTimeout(() => cb(r), 0); },
+      set(o) { Object.assign(data, o); }, remove(ks) { for (const k of [].concat(ks)) delete data[k]; } } },
+    runtime: { sendMessage(msg, cb) { cb({ ok: false }); } },
+  };
+</script>
+<script src="../src/content.js"></script>
+</body></html>
