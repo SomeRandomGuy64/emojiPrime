@@ -144,6 +144,7 @@ Bump `version` in `extension/manifests/*.json`, then attach the zips to a GitHub
 ## Credits
 
 - **Elliot DeBruyn** (MattvsJapan Immersion Dojo): the idea, and the push towards denser pictures.
+- **Andrew Balint** (MattvsJapan Immersion Dojo): feedback which led me to use an SQLite database and for letting me know about **Fred Benenson's *Emoji Dick***.
 - **Fred Benenson's *Emoji Dick*** for the translate-three-times-then-vote method behind the set phrases.
 - **いらすとや** (Takashi Mifune) for the illustrations, and **Noto Color Emoji** for the emoji.
 - [fugashi](https://github.com/polm/fugashi) + UniDic for tokenizing, and [stable-ts](https://github.com/jianfch/stable-ts) / Whisper for word alignment.
