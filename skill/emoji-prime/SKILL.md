@@ -80,6 +80,8 @@ This downloads the chosen illustrations into `~/.cache/emoji-prime/` and waits f
 
 Useful while waiting: `emoji_prime.py status VIDEO` shows what's done.
 
+If the user only watches on YouTube, use `build --web-only`. It writes just `web.json` in about a second, with no illustration downloads and no mpv rendering (the browser draws emoji itself and loads illustrations by URL), and it leaves any existing mpv build alone.
+
 It also writes `web.json`, the pack for the **YouTube Emoji Prime** browser extension (text emoji + Irasutoya URLs, ~1 MB for 2 h), so the same pictures can play over the YouTube upload. The extension is in the emojiPrime repo's Releases (https://github.com/SomeRandomGuy64/emojiPrime/releases): the user loads `web.json` from its panel on the video's page.
 
 ### 5. Watch

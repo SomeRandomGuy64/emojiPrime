@@ -44,12 +44,15 @@ def web_export(items):
     return out
 
 
-def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, youtube=None):
+def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, youtube=None, web_only=False):
     """plan: {cue: {"rebus": [[emoji, anchor]], "vlog": [{"image", "anchor", "title"}],
-                    "words": {lemma: {"emoji", "image", "sense"}}}}"""
+                    "words": {lemma: {"emoji", "image", "sense"}}}}
+    web_only: write just web.json (the browser draws emoji and loads illustrations by URL), no images, no
+    overlay.json; an existing mpv build in out_dir is left as it was."""
     img_dir = os.path.join(out_dir, "img")
-    shutil.rmtree(img_dir, ignore_errors=True)
-    os.makedirs(img_dir)
+    if not web_only:
+        shutil.rmtree(img_dir, ignore_errors=True)
+        os.makedirs(img_dir)
     events = []  # [start, end, cue, kind, payload, group]
     for c in cues:
         cid, text = str(c["cue"]), c["text"]
@@ -128,11 +131,14 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
         stem = os.path.join(img_dir, f"p{len(items):05d}")
         if kind == "rebus":
             emoji, shown = v
-            im = emoji_strip(emoji, shown)
-            if im is None:
+            if web_only:  # the browser draws emoji itself: nothing to render
+                img = "" if any(emoji[:shown]) else None
+            else:
+                im = emoji_strip(emoji, shown)
+                img = render(im, tilt(group) / 2, stem, SCALE["rebus"], aspect=3.4, crop=False) if im else None
+            if img is None:
                 continue
             angle = tilt(group) / 2
-            img = render(im, angle, stem, SCALE["rebus"], aspect=3.4, crop=False)
             label = "".join(emoji[:shown])
             web = {"ch": emoji, "shown": shown, "sc": SCALE["rebus"]}
         else:
@@ -142,6 +148,8 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
                 web = {"u": v.get("url"), "sc": SCALE["vlog"] if kind == "vlog" else SCALE["word_img"]}
             else:
                 web = {"em": v["emoji"], "sc": SCALE["word_emoji"]}
+            if web_only:
+                rendered[key] = ""
             if key not in rendered:  # same picture again later: reuse the files
                 if v.get("image"):
                     s = SCALE["vlog"] if kind == "vlog" else SCALE["word_img"]
@@ -163,7 +171,8 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
     web_items = web_export(items)
     for it in items:
         it.pop("web", None)
-    jdump({"mode": "vlog", "box": BOX, "sizes": SIZES, "items": items}, os.path.join(out_dir, "overlay.json"))
+    if not web_only:  # mpv's overlay needs the rendered images
+        jdump({"mode": "vlog", "box": BOX, "sizes": SIZES, "items": items}, os.path.join(out_dir, "overlay.json"))
     jdump({"format": "emoji-prime-web", "version": 1, "box": BOX, "youtube": youtube, "items": web_items},
           os.path.join(out_dir, "web.json"))
     by = {}
