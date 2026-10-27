@@ -1,0 +1,5 @@
+fugashi
+unidic-lite
+pillow
+numpy
+stable-ts

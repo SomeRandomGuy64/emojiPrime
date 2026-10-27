@@ -1,0 +1,102 @@
+/* ---- Picture layer: sized to the visible video picture by content.js ---- */
+.yep-layer {
+  position: absolute;
+  z-index: 59;
+  pointer-events: none;
+  overflow: hidden;
+}
+.yep-sticker {
+  position: absolute;
+  --yep-o: 3px;
+  /* white sticker outline + soft shadow, like the mpv version */
+  filter:
+    drop-shadow(var(--yep-o) 0 0 #fff) drop-shadow(calc(-1 * var(--yep-o)) 0 0 #fff)
+    drop-shadow(0 var(--yep-o) 0 #fff) drop-shadow(0 calc(-1 * var(--yep-o)) 0 #fff)
+    drop-shadow(2px 4px 4px rgba(0, 0, 0, 0.45));
+  animation: yep-pop 0.12s ease-out;
+  white-space: nowrap;
+  line-height: 1;
+  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+.yep-img { display: block; width: auto; height: auto; object-fit: contain; }
+.yep-rebus .yep-chunk { display: inline-block; margin: 0 0.04em; }
+.yep-rebus .yep-chunk.yep-hidden { visibility: hidden; }
+@keyframes yep-pop { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- On-screen toast ---- */
+.yep-osd {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+  z-index: 62;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font: 500 14px/1.2 system-ui, sans-serif;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.yep-osd.yep-show { opacity: 1; }
+
+/* ---- Control panel ---- */
+.yep-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 63;
+  width: 232px;
+  background: rgba(18, 18, 18, 0.92);
+  color: #eee;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  font: 13px/1.35 system-ui, sans-serif;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  overflow: hidden;
+}
+.yep-panel * { box-sizing: border-box; }
+.yep-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: grab;
+  background: rgba(255, 255, 255, 0.05);
+}
+.yep-head .yep-title { font-weight: 700; font-size: 12px; letter-spacing: 0.02em; }
+.yep-head .yep-collapse {
+  cursor: pointer; background: none; border: none; color: #bbb;
+  font-size: 15px; line-height: 1; padding: 0 2px;
+}
+.yep-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.yep-panel.yep-collapsed .yep-body { display: none; }
+.yep-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.yep-row label { color: #cfcfcf; }
+.yep-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.yep-toggle input { width: 15px; height: 15px; accent-color: #3ea6ff; }
+.yep-stepper { display: inline-flex; align-items: center; gap: 4px; }
+.yep-btn {
+  cursor: pointer; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08); color: #fff;
+  border-radius: 6px; min-width: 26px; height: 24px; padding: 0 6px;
+  font-size: 13px; line-height: 1;
+}
+.yep-btn:hover { background: rgba(255,255,255,0.16); }
+.yep-btn.yep-wide { width: 100%; height: 28px; font-weight: 600; }
+.yep-val { min-width: 54px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yep-num {
+  width: 56px; height: 24px; padding: 0 4px;
+  background: rgba(255,255,255,0.08); color: #fff;
+  border: 1px solid rgba(255,255,255,0.18); border-radius: 6px;
+  font: inherit; text-align: center; font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.yep-num::-webkit-outer-spin-button,
+.yep-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.yep-num:focus { outline: none; border-color: #3ea6ff; }
+.yep-status { color: #9a9a9a; font-size: 11.5px; min-height: 1em; }
+.yep-hint { color: #8a8a8a; font-size: 11px; }
+.yep-file-name { color: #8fd08f; font-size: 11px; word-break: break-all; }
