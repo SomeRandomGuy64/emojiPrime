@@ -19,6 +19,14 @@ All the mechanical work is in `scripts/emoji_prime.py` in this skill's folder. T
 
 Run every command with `python3 <skill dir>/scripts/emoji_prime.py`. Pass the same `VIDEO` path (and `--out`, if used) to each command.
 
+### First: check for updates
+
+Before starting a new video, run `emoji_prime.py update`. Skip it when resuming a video that's already prepared, so the code doesn't change between steps.
+
+- If it prints `UPDATED`, read this file again before doing anything else, because these instructions may have changed.
+- If it says `requirements.txt changed`, install the requirements as in step 0.
+- If it says it couldn't check, carry on with the installed version.
+
 ### Modes
 
 `prepare --mode` sets how much of the user's usage the LLM steps spend. Ask the user which they want if they haven't said; `high` is the default.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Emoji prime: pictures pop up over a Japanese video as each word is spoken (no English).
 
+    emoji_prime.py update     (run first: brings the skill level with the repo)
     emoji_prime.py prepare    VIDEO [--mode high|medium|low] [--subs FILE] [--word-times FILE] [--out DIR]
     emoji_prime.py candidates VIDEO        (after the A_*.md or M_*.md prompts are answered)
     emoji_prime.py build      VIDEO        (after the B_*.md prompts are answered)
@@ -732,6 +733,11 @@ def cmd_catalog(a):
             print(f"{h['title']} | {h['img']}")
 
 
+def cmd_update(a):
+    import ep_update
+    ep_update.update()
+
+
 def cmd_phrases(a):
     for p in API.phrases():
         if not a.word or any(a.word in f for f in [p["phrase"], *p.get("forms", [])]):
@@ -776,6 +782,8 @@ def main():
         p.add_argument("--pre", type=float, default=0.1, help="show pictures this early (s)")
         p.add_argument("--stay", type=float, default=1.0, help="keep pictures up this long after the word (s)")
     video_cmd("status", cmd_status)
+    pu = sub.add_parser("update", help="bring the skill level with the repo's main branch")
+    pu.set_defaults(fn=cmd_update)
     pc = sub.add_parser("catalog", help="search the Irasutoya catalog the way the candidates step does")
     pc.add_argument("--search", nargs="+", metavar="WORD", required=True)
     pc.add_argument("-n", type=int, default=8, help="hits per search word")
