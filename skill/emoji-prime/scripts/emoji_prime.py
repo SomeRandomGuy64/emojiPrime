@@ -535,20 +535,27 @@ def cmd_candidates(a):
         for lemma, s in p["senses"].items():
             if not s["emoji"] or s.get("set") or (lemma, s["sense"]) in seen:
                 continue  # set phrases keep their fixed emoji, so they get no illustration
-            seen[(lemma, s["sense"])] = True
+            seen[(lemma, s["sense"])] = None
             cand = search.get(lemma)
             if cand:
+                seen[(lemma, s["sense"])] = f"w{len(items)}"
                 items.append({"id": f"w{len(items)}", "line": cues[cid]["text"], "target": lemma, "sense": s["sense"],
                               "candidates": [short_title(x["title"]) for x in cand]})
         for n, q in enumerate(p["queries"]):
             cand = search.get(q["q"])
-            if cand:
+            s = p["senses"].get(q["q"])
+            same = seen.get((q["q"], s["sense"])) if s else None
+            if same:  # the line's word already asks this question, so step B needn't answer it twice
+                items.append({"id": f"v{cid}_{n}", "target": q["q"], "same_as": same})
+            elif cand:
                 items.append({"id": f"v{cid}_{n}", "line": cues[cid]["text"], "target": q["q"],
                               "candidates": [short_title(x["title"]) for x in cand]})
     jdump(search, os.path.join(build, "search.json"))
     jdump(items, os.path.join(build, "items.json"))
-    files = write_prompts(build, "B", PROMPT_B, [items[i:i + a.chunk] for i in range(0, len(items), a.chunk)])
-    print(f"\n{len(items)} illustration choices in {len(files)} prompt(s) to answer (step B):")
+    asked = [it for it in items if "same_as" not in it]
+    files = write_prompts(build, "B", PROMPT_B, [asked[i:i + a.chunk] for i in range(0, len(asked), a.chunk)])
+    print(f"\n{len(asked)} illustration choices in {len(files)} prompt(s) to answer (step B), "
+          f"{len(items) - len(asked)} shared with a word's choice:")
     for md, out in files:
         print(f"  {md}\n    -> {out}")
     print(f"\nthen: {next_cmd('build', video, a.out)}")
@@ -566,7 +573,7 @@ def cmd_build(a):
 
     word_img, vlog = {}, {}
     for it in items:
-        idx = B.get(it["id"])
+        idx = B.get(it.get("same_as", it["id"]))
         cand = search.get(it["target"], [])
         if not isinstance(idx, int) or not 0 <= idx < len(cand):
             continue
