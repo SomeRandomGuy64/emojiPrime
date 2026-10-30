@@ -17,10 +17,11 @@ This extension plays an emoji-prime pack (`web.json`, written by the skill's `bu
 
 ## How it works
 
+- Word pictures, the rebus and illustrations can each be shown or hidden from the panel. This only filters by item kind, so existing packs work as they are.
 - The pictures are drawn in a layer sized to the visible video picture, so letterboxing and fullscreen line up. Times come from `video.currentTime`, read every frame while the video plays.
 - Emoji are drawn as text with the system emoji font. The rebus strip has one span per chunk, each unhidden at its reveal time.
 - Irasutoya pictures load straight from Blogger's image host. If the page refuses one, `background.js` fetches it and hands it back as a data URL.
-- Packs live in extension storage per YouTube video id (`unlimitedStorage` is on, since a 2-hour stream's pack is about 1 MB). The sync offset is saved per video, and the size globally.
+- Packs live in extension storage per YouTube video id (`unlimitedStorage` is on, since a 2-hour stream's pack is about 1 MB). The sync offset is saved per video, and the size and layer choices globally.
 
 ## Firefox
 
