@@ -14,10 +14,12 @@
 
   const OFFSET_STEP = 0.25;
   const SIZE_STEP = 10;
+  const LAYERS = [["word", "Word pictures"], ["rebus", "Rebus"], ["vlog", "Illustrations"]];
 
   // ----------------------------- state -----------------------------
   let enabled = true;
   let sizePct = 100;            // user size multiplier (%)
+  const layers = { word: true, rebus: true, vlog: true }; // which item kinds are shown
   let pack = null;              // {box, items, youtube}
   let packName = "";
   let maxDur = 0;               // longest item, bounds the active-item search
@@ -40,9 +42,10 @@
     set: (obj) => { try { chrome.storage.local.set(obj); } catch (_) {} },
     remove: (keys) => { try { chrome.storage.local.remove(keys); } catch (_) {} },
   };
-  store.get(["enabled", "sizePct"]).then((r) => {
+  store.get(["enabled", "sizePct", "layers"]).then((r) => {
     if (typeof r.enabled === "boolean") enabled = r.enabled;
     if (typeof r.sizePct === "number") sizePct = r.sizePct;
+    if (r.layers) Object.assign(layers, r.layers);
     updatePanel();
   });
 
@@ -197,7 +200,7 @@
     const end = firstIndexAfter(t);
     const want = new Set();
     for (let i = end - 1; i >= 0 && items[i].s >= t - maxDur; i--) {
-      if (t < items[i].e) want.add(i);
+      if (t < items[i].e && layers[items[i].k]) want.add(i);
     }
     for (const [i, el] of live) if (!want.has(i)) { el.remove(); live.delete(i); }
     const rect = contentRect();
@@ -231,6 +234,12 @@
     enabled = v;
     store.set({ enabled });
     osd(`Emoji Prime: ${enabled ? "on" : "off"}`);
+    draw(true);
+    updatePanel();
+  }
+  function setLayer(k, v) {
+    layers[k] = v;
+    store.set({ layers });
     draw(true);
     updatePanel();
   }
@@ -273,6 +282,9 @@
       </div>
       <div class="yep-body">
         <label class="yep-toggle"><input type="checkbox" class="yep-enable"> <span>Pictures <span class="yep-hint">(Shift+E)</span></span></label>
+        <div class="yep-layers">
+          ${LAYERS.map(([k, name]) => `<label class="yep-toggle"><input type="checkbox" class="yep-layer-on" data-k="${k}"> <span>${name}</span></label>`).join("")}
+        </div>
         <div class="yep-row">
           <label>Sync offset</label>
           <span class="yep-stepper">
@@ -301,6 +313,9 @@
     };
     p.querySelector(".yep-collapse").addEventListener("click", toggleCollapse);
     p.querySelector(".yep-enable").addEventListener("change", (e) => setEnabled(e.target.checked));
+    for (const box of p.querySelectorAll(".yep-layer-on")) {
+      box.addEventListener("change", (e) => setLayer(box.dataset.k, e.target.checked));
+    }
     p.querySelector(".yep-off-up").addEventListener("click", () => setOffset(offset + OFFSET_STEP));
     p.querySelector(".yep-off-dn").addEventListener("click", () => setOffset(offset - OFFSET_STEP));
     p.querySelector(".yep-size-up").addEventListener("click", () => setSize(sizePct + SIZE_STEP));
@@ -365,6 +380,11 @@
     if (!panelEl) return;
     const q = (s) => panelEl.querySelector(s);
     q(".yep-enable").checked = enabled;
+    for (const box of panelEl.querySelectorAll(".yep-layer-on")) {
+      box.checked = layers[box.dataset.k];
+      box.disabled = !enabled;
+    }
+    q(".yep-layers").classList.toggle("yep-off-all", !enabled);
     const setNum = (el, v) => { if (document.activeElement !== el) el.value = v; };
     setNum(q(".yep-off"), offset.toFixed(2));
     setNum(q(".yep-size"), String(sizePct));

@@ -73,7 +73,7 @@ Shift+E toggles the pictures. If you copy `emoji_prime.lua` into your mpv script
 
 1. Open the video on YouTube. The 🖼️ **Emoji Prime** panel sits at the top right of the player; click **+** to open it.
 2. Click **Load web.json pack…** and choose the pack. It's saved for that video, so it loads by itself next time.
-3. **Shift+E** toggles the pictures. **Sync offset** shifts them in time if the upload is trimmed differently from your file, and **Size** scales them.
+3. **Shift+E** toggles the pictures, and the checkboxes under it show or hide **Word pictures**, the **Rebus** and **Illustrations** separately. **Sync offset** shifts them in time if the upload is trimmed differently from your file, and **Size** scales them.
 
 **Firefox (beta)**
 
