@@ -96,18 +96,30 @@ Image subtitles (PGS) can't be read. `--subs FILE` picks a file.
 
 If your subtitles came from a service with word timings (e.g. Soniox: `{"words": [{"text", "start", "end"}]}`), pass `--word-times FILE` or put it beside the video as `<stem>.soniox.json`. It replaces Whisper alignment for every line it can match.
 
+## Modes: how much usage it spends
+
+`prepare --mode` picks how much of the work an LLM does:
+
+| Mode | What the LLM does | Cost |
+|---|---|---|
+| `high` (default) | every word's sense and emoji, the sentence rebus, and the illustration picks (steps A and B) | the most; the best result |
+| `medium` | picks which of a word's 2–3 dictionary senses each line uses, plus one tone emoji and one gist-illustration word per line (step M, Haiku) | about a fifth of high |
+| `low` | nothing: each word gets its most common dictionary sense | free |
+
+Medium and low use the **picture dictionary** in [`dict/`](dict): about 40,000 words, each with up to 3 senses (a short Japanese gloss, an emoji, sometimes an Irasutoya illustration), and about 950 idioms that are pictured as a whole (我に返る 😳💡, not 🏠 for 返る). Their rebus is built from the word emoji, set phrases, idioms and grammar (ない 🚫, た ⏪, か ❓). `dict/build_dict.py` rebuilds the dictionary: word frequency from YouTube and anime subtitles plus JPDB, senses and illustrations harvested from high-mode runs, and Sonnet for the rest.
+
 ## The Irasutoya catalog and the emoji-prime server
 
-Picture candidates come from a catalog of all ~25,000 Irasutoya posts: titles, descriptions, labels and image links, but no images. The catalog lives on the emoji-prime server at `api.fazon.nexus`, so the skill stays small and nobody has to download it. The server refreshes it from Irasutoya's public feed every week and also serves the [set phrases](phrases).
+Picture candidates come from a catalog of all ~25,000 Irasutoya posts: titles, descriptions, labels and image links, but no images. The catalog lives on the emoji-prime server at `api.fazon.nexus`, so the skill stays small and nobody has to download it. The server refreshes it from Irasutoya's public feed every week and also serves the [set phrases](phrases) and the picture dictionary, which it pulls from this repo's `phrases/` and `dict/` every hour.
 
-What the skill sends the server: the Japanese search words for picture candidates (dictionary-form words like 猫 or 驚く), and a request for the phrase list. Subtitles, lines and video files never leave your machine. Each picked illustration is downloaded straight from Irasutoya's image host into `~/.cache/emoji-prime/` (set `EMOJI_PRIME_CACHE` to move it). The phrase list is cached there too, so a run still works if the server is down. Only picture search needs it.
+What the skill sends the server: the Japanese search words for picture candidates (dictionary-form words like 猫 or 驚く), requests for the phrase and idiom lists, and in medium and low mode the video's distinct dictionary-form words, to look up their senses. Lines, timings and video files never leave your machine. Each picked illustration is downloaded straight from Irasutoya's image host into `~/.cache/emoji-prime/` (set `EMOJI_PRIME_CACHE` to move it). The phrase list is cached there too, so a run still works if the server is down. Only picture search needs it.
 
 ```bash
 python3 skill/emoji-prime/scripts/emoji_prime.py catalog --search 猫 驚く     # what the candidates step would find
 python3 skill/emoji-prime/scripts/emoji_prime.py phrases 週                   # the set phrases containing 週
 ```
 
-`EMOJI_PRIME_API` points the skill at another server.
+`EMOJI_PRIME_API` points the skill at another server. `EMOJI_PRIME_DICT=dict` makes medium and low read the picture dictionary from this repo's `dict/` folder instead (offline, or to try a rebuild before it's pushed).
 
 Irasutoya's illustrations are free for personal use under [their terms](https://www.irasutoya.com/p/terms.html).
 
@@ -127,6 +139,7 @@ Irasutoya's illustrations are free for personal use under [their terms](https://
 | ├ `scripts/ep_api.py` | the emoji-prime server: catalog search, set phrases and their matching |
 | └ `mpv/emoji_prime.lua` | the mpv player script |
 | [`phrases/`](phrases) | the set phrases and the prompts used to make them |
+| [`dict/`](dict) | the picture dictionary (`senses.json`, `idioms.json`) and `build_dict.py`, which builds it |
 | [`extension/`](extension) | the YouTube extension: shared `src/`, one manifest per browser in `manifests/` |
 | [`build.py`](build.py) | packages the release zips into `dist/` |
 | [`extension/test/firefox_smoke.py`](extension/test/firefox_smoke.py) | headless Firefox smoke test on real YouTube |

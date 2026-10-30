@@ -19,6 +19,18 @@ All the mechanical work is in `scripts/emoji_prime.py` in this skill's folder. T
 
 Run every command with `python3 <skill dir>/scripts/emoji_prime.py`. Pass the same `VIDEO` path (and `--out`, if used) to each command.
 
+### Modes
+
+`prepare --mode` sets how much of the user's usage the LLM steps spend. Ask the user which they want if they haven't said; `high` is the default.
+
+- `high`: the LLM writes every sense, rebus and illustration choice (steps A and B). Best result, most tokens.
+- `medium`: each word's sense comes from the picture dictionary (~40k words, on the emoji-prime server). The LLM only picks which of a word's 2-3 senses a line uses, plus one tone emoji and one gist word per line (step M, answered with Haiku; no step B). About a fifth of high's tokens.
+- `low`: no LLM at all. Every word gets its most common dictionary sense; no gist pictures. Free.
+
+In medium and low, idioms (also from the server) are matched before single words, so 我に返った gets one picture instead of 🏠 for 返る. The rebus is built from the word emoji, set phrases, idioms and grammar (ない 🚫, た ⏪, か ❓).
+
+For `medium`, step 2 below answers the `M_NN.md` prompts instead of `A_NN.md` (with model `haiku`), and `candidates` then goes straight to the build. For `low`, `prepare` prints the `build` command directly.
+
 ### 0. Dependencies
 
 Check, and install only what's missing:

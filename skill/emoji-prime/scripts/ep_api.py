@@ -1,8 +1,11 @@
-"""The emoji-prime web API (api.fazon.nexus): Irasutoya catalog search and the prebaked set phrases.
+"""The emoji-prime web API (api.fazon.nexus): Irasutoya catalog search, the prebaked set phrases and the picture
+dictionary (word senses and idioms, for --mode medium/low).
 
 The catalog (~25k posts) lives on the server, so the skill doesn't ship it. The set phrases are curated in the
 emojiPrime repo's data/phrases.tsv; the server pulls them from GitHub, and this module caches its copy in
-~/.cache/emoji-prime/phrases.json so a run still works offline. Set EMOJI_PRIME_API to use another server.
+~/.cache/emoji-prime/phrases.json so a run still works offline. The dictionary is built in the repo's dict/ folder
+and pulled by the server the same way; set EMOJI_PRIME_DICT to that folder to use local files instead (offline, or
+to try a new build before it's pushed). Set EMOJI_PRIME_API to use another server.
 """
 import json, os, urllib.error, urllib.request
 
@@ -10,6 +13,9 @@ from ep_common import CACHE, jdump, jload, log
 
 API = os.environ.get("EMOJI_PRIME_API", "https://api.fazon.nexus").rstrip("/") + "/emoji-prime"
 PHRASES_CACHE = os.path.join(CACHE, "phrases.json")
+IDIOMS_CACHE = os.path.join(CACHE, "idioms.json")
+LOCAL_DICT = os.environ.get("EMOJI_PRIME_DICT")
+SENSES_BATCH = 4000  # the server takes up to 5000 words a request
 SEARCH_BATCH = 500  # the server takes up to 1000 words a request
 
 
@@ -31,6 +37,42 @@ def search_many(words, n=8):
         except (urllib.error.URLError, OSError) as e:
             raise SystemExit(f"couldn't reach the emoji-prime catalog at {API}/search ({e})")
     return out
+
+
+def senses(words):
+    """{lemma: [[gloss, emoji or None, image url or None, image title or None], ...]} for the words the picture
+    dictionary has, most common sense first."""
+    words, out = sorted({w for w in words if w and len(w) <= 32}), {}
+    if LOCAL_DICT:
+        d = jload(os.path.join(LOCAL_DICT, "senses.json"))
+        return {w: d[w] for w in words if w in d}
+    for i in range(0, len(words), SENSES_BATCH):
+        try:
+            with _call("/senses", {"words": words[i:i + SENSES_BATCH]}) as r:
+                out.update(json.load(r)["senses"])
+        except (urllib.error.URLError, OSError) as e:
+            raise SystemExit(f"couldn't reach the emoji-prime dictionary at {API}/senses ({e}); "
+                             "set EMOJI_PRIME_DICT to a local dict/ folder to work offline")
+    return out
+
+
+def idioms():
+    """[{"phrase", "lemmas", "gloss", "emoji"}]. Uses the cached copy if the server can't be reached."""
+    if LOCAL_DICT:
+        return jload(os.path.join(LOCAL_DICT, "idioms.json"))
+    cached = jload(IDIOMS_CACHE, {}) or None
+    headers = {"If-None-Match": cached["etag"]} if cached and cached.get("etag") else {}
+    try:
+        with _call("/idioms", headers=headers, timeout=60) as r:
+            cached = {"etag": r.headers.get("ETag", ""), "idioms": json.load(r)["idioms"]}
+            os.makedirs(CACHE, exist_ok=True)
+            jdump(cached, IDIOMS_CACHE)
+    except urllib.error.HTTPError as e:
+        if e.code != 304:
+            log(f"idioms: server said {e.code}; {'using the cached copy' if cached else 'none this run'}")
+    except (urllib.error.URLError, OSError) as e:
+        log(f"idioms: offline ({e}); {'using the cached copy' if cached else 'none this run'}")
+    return cached["idioms"] if cached else []
 
 
 def phrases():

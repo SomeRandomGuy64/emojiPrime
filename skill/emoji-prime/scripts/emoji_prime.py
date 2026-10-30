@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Emoji prime: pictures pop up over a Japanese video as each word is spoken (no English).
 
-    emoji_prime.py prepare    VIDEO [--subs FILE] [--word-times FILE] [--out DIR] [--whisper-model auto]
-    emoji_prime.py candidates VIDEO        (after the A_*.md prompts are answered)
+    emoji_prime.py prepare    VIDEO [--mode high|medium|low] [--subs FILE] [--word-times FILE] [--out DIR]
+    emoji_prime.py candidates VIDEO        (after the A_*.md or M_*.md prompts are answered)
     emoji_prime.py build      VIDEO        (after the B_*.md prompts are answered)
     emoji_prime.py auto       VIDEO --llm claude|openrouter [--model M] [--jobs 4]
     emoji_prime.py status     VIDEO
@@ -13,6 +13,13 @@ Output goes to <video dir>/<video stem>.emojiprime/ (overlay.json + img/), which
 automatically; working files are in its _build/ folder. Every step resumes from what's already there.
 
 The two LLM steps are plain prompt files: _build/llm/A_NN.md -> A_NN.json and B_NN.md -> B_NN.json.
+--mode picks how much of the work the LLM does:
+  high    the LLM writes every sense, rebus and illustration search (steps A and B)
+  medium  each word's sense comes from the picture dictionary (on the emoji-prime server); the LLM only picks which of a
+          word's dictionary senses a line uses, plus one tone emoji per line (step M, no step B)
+  low     no LLM: every word gets its most common dictionary sense
+In medium and low the rebus is built from the word emoji, the set phrases, idioms (from the server, matched by
+lemmas so 我に返った finds 我に返る) and grammar (ない 🚫, た ⏪, か ❓). Medium also gets one gist illustration per line.
 Inside Claude Code, the emoji-prime skill answers them with subagents. `auto` instead pipes them through
 the `claude` CLI (`claude -p`, uses your Claude login) or OpenRouter (OPENROUTER_API_KEY, costs money).
 """
@@ -25,7 +32,8 @@ from ep_common import clean_emoji, jdump, jload, log  # noqa: E402
 import ep_api as API  # noqa: E402
 import ep_irasutoya as IR  # noqa: E402
 
-CHUNK_A, CHUNK_B, N_CAND = 120, 400, 8  # big chunks: each prompt costs a fixed agent overhead
+CHUNK_A, CHUNK_B, CHUNK_M, N_CAND = 120, 400, 300, 8  # big chunks: each prompt costs a fixed agent overhead
+REBUS_MAX = 6
 LUA = os.path.join(os.path.dirname(HERE), "mpv", "emoji_prime.lua")
 
 PROMPT_A = """You are annotating a Japanese video for "emoji prime": pictures pop up over the video as words are spoken, so a Japanese learner understands WITHOUT any English.
@@ -43,6 +51,21 @@ Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 �
 Answer with ONLY a JSON object, no prose and no code fences:
 {"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": [["😱", "わあ"], ...], "q": [["<word>", "<anchor>"]]}, ...}
 with every cue id.
+
+Cues:
+"""
+
+PROMPT_M = """You are choosing word senses for "emoji prime": pictures pop up over a Japanese video as words are spoken, so a Japanese learner understands WITHOUT any English.
+
+For every cue below (text = the spoken line), "w" lists the words whose sense you must choose:
+- a list of numbered candidate senses (very short Japanese glosses, 0-based): answer the index of the sense used IN THIS LINE, or null if none fits or the word isn't really there (a name fragment, a misparse, a filler use).
+- null (the word isn't in the dictionary): answer [gloss, emoji] (gloss = 2-8 character Japanese gloss of the sense used here, emoji = 1-3 emoji picturing it), or null if it can't be pictured here.
+
+Also give "g": a word to search an illustration catalog (Irasutoya) with, for one picture that conveys the line's gist, as [word, anchor]: word = a single common Japanese word in dictionary form (電話, 驚く, 喜ぶ, お金, 旅行), anchor = an EXACT substring (1-6 characters) of the text where that idea is said. Use null for filler, greetings, cries and very short lines.
+
+Also give "e": ONE emoji for the line's tone or the speaker's emotion when it is strong and clear (😱 a scream, 😂 laughing, 😡 anger, 🥺 pleading, 😮 surprise), else null. Never use emoji that show letters, digits or kanji, or flags.
+
+Answer with ONLY a JSON object, no prose and no code fences: {"<cue>": {"e": "<emoji>" or null, "g": ["<word>", "<anchor>"] or null, "w": {"<word>": index or null or ["<gloss>", "<emoji>"]}}, ...} with every cue id.
 
 Cues:
 """
@@ -131,8 +154,8 @@ def cmd_prepare(a):
         jdump(M.add_bounds(cues), cues_path)
     spoken = [c for c in cues if c["text"]]
     sets = load_phrases(build, cues)
-    jdump({"video": video, "work": work, "subs": subs, "whisper_model": a.whisper_model, "youtube": a.youtube},
-          os.path.join(build, "state.json"))
+    jdump({"video": video, "work": work, "subs": subs, "whisper_model": a.whisper_model, "youtube": a.youtube,
+           "mode": a.mode}, os.path.join(build, "state.json"))
     log(f"{len(spoken)} spoken cues, {sum(len(c['words']) for c in spoken)} content words, "
         f"{sum(len(m) for m in sets.values())} set phrases")
     words = a.word_times
@@ -143,10 +166,24 @@ def cmd_prepare(a):
         log(f"word timings from {words}: {n}/{total} cues matched"
             + ("" if n == total else "; Whisper aligns the rest in the background"))
     start_background(build)
-    chunks = [[a_entry(c, sets.get(str(c["cue"]), [])) for c in spoken[i:i + a.chunk]]
-              for i in range(0, len(spoken), a.chunk)]
-    files = write_prompts(build, "A", PROMPT_A, chunks)
-    print(f"\n{len(files)} prompt(s) to answer (step A):")
+    if a.mode in ("medium", "low"):
+        sets = dict_sets(build, cues, sets)
+    if a.mode == "low":
+        write_dict_plan(build, spoken, sets, {})
+        print(f"\nno LLM steps in low mode; then: {next_cmd('build', video, a.out)}")
+        return
+    if a.mode == "medium":
+        D = load_senses(build, spoken)
+        entries = [m_entry(c, sets.get(str(c["cue"]), []), D) for c in spoken]
+        chunk = a.chunk or CHUNK_M
+        files = write_prompts(build, "M", PROMPT_M, [entries[i:i + chunk] for i in range(0, len(entries), chunk)])
+        print(f"\n{len(files)} prompt(s) to answer (step M, sense choices; Haiku is enough):")
+    else:
+        chunk = a.chunk or CHUNK_A
+        chunks = [[a_entry(c, sets.get(str(c["cue"]), [])) for c in spoken[i:i + chunk]]
+                  for i in range(0, len(spoken), chunk)]
+        files = write_prompts(build, "A", PROMPT_A, chunks)
+        print(f"\n{len(files)} prompt(s) to answer (step A):")
     for md, out in files:
         print(f"  {md}\n    -> {out}")
     print(f"\nthen: {next_cmd('candidates', video, a.out)}")
@@ -173,6 +210,201 @@ def a_entry(c, ms):
     if ms:
         e["set"] = [[m["emoji"], m["form"]] for m in ms]
     return e
+
+
+def load_senses(build, spoken, extra=()):
+    """The picture dictionary's entries for this video's words (plus extra, e.g. step M's gist words):
+    {lemma: [[gloss, emoji or null, image url or null, image title or null], ...]}, most common sense first.
+    Looked up on the server once and kept in _build/senses.json; words not asked about yet are looked up then."""
+    path = os.path.join(build, "senses.json")
+    have = jload(path) if os.path.exists(path) else {"asked": [], "senses": {}}
+    words = {w for c in spoken for w in c["words"]} | set(extra)
+    new = words - set(have["asked"])
+    if new:
+        have = {"asked": sorted(set(have["asked"]) | new), "senses": {**have["senses"], **API.senses(new)}}
+        jdump(have, path)
+    return have["senses"]
+
+
+def dict_sets(build, cues, sets):
+    """Set phrases plus idiom matches, for medium/low (in high mode the LLM handles idioms itself). Idioms are
+    matched on lemmas with auxiliaries left out, longest first, and never overlap a set phrase."""
+    path = os.path.join(build, "idiom_matches.json")
+    if os.path.exists(path):
+        return jload(path)
+    import fugashi
+    tagger = fugashi.Tagger()
+    by_first = {}
+    for d in API.idioms():
+        by_first.setdefault(d["lemmas"][0], []).append(d)
+    for ds in by_first.values():
+        ds.sort(key=lambda d: -len(d["lemmas"]))
+    out, n = {}, 0
+    for c in cues:
+        if not c["text"]:
+            continue
+        text, toks, pos = c["text"], [], 0
+        for w in tagger(text):
+            at = text.find(w.surface, pos)
+            if at < 0:
+                continue
+            pos = at + len(w.surface)
+            if w.feature.pos1 != "助動詞":
+                toks.append(((getattr(w.feature, "lemma", None) or w.surface).split("-")[0], at, pos))
+        ms = list(sets.get(str(c["cue"]), []))
+        i = 0
+        while i < len(toks):
+            hit = next((d for d in by_first.get(toks[i][0], [])
+                        if [t[0] for t in toks[i:i + len(d["lemmas"])]] == d["lemmas"]), None)
+            if hit:
+                start, end = toks[i][1], toks[i + len(hit["lemmas"]) - 1][2]
+                if not inside(start, ms, end - start):
+                    ms.append({"phrase": hit["phrase"], "form": text[start:end], "start": start, "end": end,
+                               "emoji": hit["emoji"], "gloss": hit["gloss"]})
+                    n += 1
+                i += len(hit["lemmas"])
+            else:
+                i += 1
+        if ms:
+            out[str(c["cue"])] = sorted(ms, key=lambda m: m["start"])
+    jdump(out, path)
+    log(f"{n} idiom matches")
+    return out
+
+
+def gist_images(answers, D):
+    """Step M's gist words -> illustrations, with no step B: the word's own dictionary illustration if it has one,
+    else the first catalog hit whose title starts with the word (電話のイラスト for 電話, never 突沸 for 突然)."""
+    words = {g[0] for r in answers.values() if isinstance(r, dict) and isinstance(r.get("g"), list)
+             and len(r["g"]) == 2 and isinstance(r["g"][0], str) for g in [r["g"]]}
+    found, ask = {}, []
+    for w in words:
+        img = next(((s[2], s[3]) for s in D.get(w, []) if s[2]), None)
+        if img:
+            found[w] = img
+        else:
+            ask.append(w)
+    if ask:
+        for w, hits in IR.search_many(ask, N_CAND).items():
+            h = next((h for h in hits if h["title"].startswith(w)), None)
+            if h:
+                found[w] = (h["img"], h["title"])
+    return found
+
+
+def m_entry(c, ms, D):
+    """A cue as step M sees it: only the words with a real choice (2+ senses, or not in the dictionary)."""
+    w = {}
+    for lemma, (surf, off) in c["words"].items():
+        if inside(off, ms, len(surf)):
+            continue
+        cand = D.get(lemma)
+        if not cand:
+            w[lemma] = None
+        elif len(cand) > 1:
+            w[lemma] = [s[0] for s in cand]
+    return {"cue": c["cue"], "text": c["text"], "w": w}
+
+
+_GRAMMAR = {("助動詞", "ない"): "🚫", ("助動詞", "ぬ"): "🚫", ("助動詞", "ず"): "🚫", ("形容詞", "無い"): "🚫",
+            ("助動詞", "た"): "⏪", ("助動詞", "たい"): "🙏", ("動詞", "下さる"): "🙏", ("形容詞", "欲しい"): "🙏",
+            ("助詞", "か"): "❓", ("代名詞", "何"): "❓", ("代名詞", "誰"): "❓", ("代名詞", "何処"): "❓",
+            ("副詞", "どう"): "❓", ("副詞", "何故"): "❓"}
+_TAGGER = None
+
+
+def grammar_chunks(text):
+    """Rebus chunks for grammar, (offset, emoji, anchor), each emoji at most once per line."""
+    global _TAGGER
+    import fugashi
+    _TAGGER = _TAGGER or fugashi.Tagger()
+    out, pos, seen = [], 0, set()
+    for w in _TAGGER(text):
+        at = text.find(w.surface, pos)
+        if at < 0:
+            continue
+        pos = at + len(w.surface)
+        f = w.feature
+        if f.pos1 == "助詞" and f.pos2 != "終助詞":
+            continue  # か as a list particle (AかB) isn't a question
+        e = _GRAMMAR.get((f.pos1, (getattr(f, "lemma", None) or w.surface).split("-")[0]))
+        after = text[pos:pos + 1]
+        if e == "⏪" and w.surface in ("たら", "だら", "たり", "だり"):
+            continue  # conditional / listing, not past
+        if e == "🚫" and w.surface.startswith("ね") and (at == 0 or text[at - 1] in "、。！？ 　"):
+            continue  # ねえ "hey" at the start of a clause, which UniDic reads as ない
+        if e == "🚫" and after in "？?か" and after:
+            continue  # 〜ない？ is an invitation or a rhetorical question, not a negation
+        if e == "❓" and text.startswith(("どうも", "どうぞ"), at):
+            continue
+        if e and e not in seen:
+            seen.add(e)
+            out.append((at, e, w.surface))
+    q = max(text.rfind("？"), text.rfind("?"))
+    if q > 0 and "❓" not in seen:
+        out.append((q, "❓", text[max(0, q - 2):q + 1]))
+    return out
+
+
+def dict_plan(c, ms, D, ans, gists=None):
+    """A cue's plan from the dictionary: each word's sense is the step-M pick, else the most common one."""
+    text, picks = c["text"], (ans.get("w") if isinstance(ans, dict) else None) or {}
+    senses, chunks = {}, []
+    for lemma, (surf, off) in c["words"].items():
+        if inside(off, ms, len(surf)):
+            continue
+        cand = D.get(lemma)
+        p = picks.get(lemma, 0) if lemma in picks or cand else None
+        if isinstance(p, list) and len(p) == 2:
+            s = [p[0], clean_emoji(p[1]), None, None]
+        elif isinstance(p, int) and cand and 0 <= p < len(cand):
+            s = cand[p]
+        else:
+            continue
+        e = clean_emoji(s[1])
+        if e:
+            senses[lemma] = {"sense": s[0], "emoji": e, "img": s[2], "title": s[3]}
+            chunks.append((off, 1, [e, surf]))
+    for m in ms:
+        senses[m["phrase"]] = {"sense": m["gloss"], "emoji": clean_emoji(m["emoji"]), "set": [m["form"], m["start"]]}
+        chunks.append((m["start"], 0, [clean_emoji(m["emoji"]), m["form"]]))
+    for off, e, anc in grammar_chunks(text):
+        if not inside(off, ms, len(anc)):
+            chunks.append((off, 2, [e, anc]))
+    tone = clean_emoji(ans.get("e")) if isinstance(ans, dict) else None
+    if tone:
+        chunks.append((-1, 0, [tone, text[:2]]))
+    chunks.sort(key=lambda x: (x[0], x[1]))
+    room = REBUS_MAX - sum(k != 1 for _, k, _ in chunks)  # grammar, set phrases and tone always stay
+    rebus, used = [], set()
+    for _, k, ch in chunks:
+        if ch[0] in used:  # 待って待って待って: one ✋⏳ is enough
+            continue
+        used.add(ch[0])
+        if k != 1 or room > 0:
+            rebus.append(ch)
+            room -= k == 1
+    g = ans.get("g") if isinstance(ans, dict) else None
+    gist = []
+    if isinstance(g, list) and len(g) == 2 and gists and g[0] in gists:
+        gist = [{"img": gists[g[0]][0], "title": gists[g[0]][1], "anchor": g[1] if g[1] in text else ""}]
+    return {"senses": senses, "rebus": rebus, "queries": [], "gist": gist}
+
+
+def write_dict_plan(build, spoken, sets, answers):
+    gist_words = [r["g"][0] for r in answers.values() if isinstance(r, dict) and isinstance(r.get("g"), list)
+                  and len(r["g"]) == 2 and isinstance(r["g"][0], str)]
+    D = load_senses(build, spoken, gist_words)
+    gists = gist_images(answers, D) if answers else {}
+    plan = {str(c["cue"]): dict_plan(c, sets.get(str(c["cue"]), []), D, answers.get(str(c["cue"])) or {}, gists)
+            for c in spoken}
+    jdump(plan, os.path.join(build, "plan_a.json"))
+    jdump([], os.path.join(build, "items.json"))
+    jdump({}, os.path.join(build, "search.json"))
+    n = sum(len([s for s in p["senses"].values() if not s.get("set")]) for p in plan.values())
+    log(f"{len(plan)} cues planned from the dictionary: {n} word pictures, "
+        f"{sum(bool(s.get('img')) for p in plan.values() for s in p['senses'].values())} of them illustrations, "
+        f"{sum(len(p['gist']) for p in plan.values())} gist illustrations")
 
 
 def short_title(t):
@@ -247,10 +479,15 @@ def cmd_bg(a):
 
 def cmd_candidates(a):
     video, work, build = paths(a.video, a.out)
-    load_state(build)
+    st = load_state(build)
     cue_list = jload(os.path.join(build, "cues.json"))
     cues = {str(c["cue"]): c for c in cue_list}
     sets = load_phrases(build, cue_list)
+    if st.get("mode") in ("medium", "low"):
+        answers = read_answers(build, "M") if st.get("mode") == "medium" else {}
+        write_dict_plan(build, [c for c in cue_list if c["text"]], dict_sets(build, cue_list, sets), answers)
+        print(f"\nno step B in {st['mode']} mode; then: {next_cmd('build', video, a.out)}")
+        return
     A = read_answers(build, "A")
     plan, n_bad = {}, 0
     for cid, r in A.items():
@@ -351,12 +588,25 @@ def cmd_build(a):
                 by_id[cid]["words"][lemma] = s["set"]
             if s["emoji"]:
                 img = word_img.get((lemma, s["sense"]))
+                if not img and s.get("img"):  # medium/low: the dictionary sense's own illustration
+                    try:
+                        img = (s["img"] if a.web_only else IR.fetch_image(s["img"]), s.get("title") or s["emoji"],
+                               s["img"])
+                    except Exception as e:
+                        log(f"download failed for {lemma} ({e})")
                 words[lemma] = {"emoji": s["emoji"], "sense": s["sense"], "image": img[0] if img else None,
                                 "url": img[2] if img else None,
                                 "title": img[1] if img else s["emoji"]}
         plan[cid] = {"rebus": p["rebus"], "words": words,
                      "vlog": [{"image": path, "url": url, "title": title, "anchor": p["queries"][n]["anchor"]}
                               for n, path, title, url in sorted(vlog.get(cid, []))]}
+        for g in p.get("gist", []):  # medium: step M's gist word, already resolved to an illustration
+            try:
+                path = g["img"] if a.web_only else IR.fetch_image(g["img"])
+            except Exception as e:
+                log(f"download failed for {g['title']} ({e})")
+                continue
+            plan[cid]["vlog"].append({"image": path, "url": g["img"], "title": g["title"], "anchor": g["anchor"]})
     log(f"{len(word_img)} word illustrations, {sum(len(v) for v in vlog.values())} sentence illustrations")
 
     for job in ("align", "place"):  # wait for the background jobs (or run them here if they died)
@@ -395,9 +645,11 @@ def cmd_status(a):
     if not os.path.exists(os.path.join(build, "state.json")):
         print("not prepared yet")
         return
-    for tag in ("A", "B"):
+    for tag in ("A", "M", "B"):
         mds = sorted(glob.glob(os.path.join(build, "llm", f"{tag}_*.md")))
         todo = [m for m in mds if not os.path.exists(m[:-3] + ".json")]
+        if not mds:
+            continue
         print(f"step {tag}: {len(mds) - len(todo)}/{len(mds)} prompts answered" + "".join(f"\n  todo: {m}" for m in todo))
     for job, f in (("align", "align.json"), ("place", "placement.json")):
         done = os.path.exists(os.path.join(build, f + ".done"))
@@ -445,11 +697,20 @@ def answer_all(build, tag, a):
 
 def cmd_auto(a):
     _, _, build = paths(a.video, a.out)
-    if not os.path.exists(os.path.join(build, "llm")):
+    if not os.path.exists(os.path.join(build, "state.json")):
         cmd_prepare(a)
+    if a.mode == "low":
+        return cmd_build(a)
+    if a.mode == "medium":
+        log(f"step M via {a.llm}")
+        a.model = a.model or ("haiku" if a.llm == "claude" else "anthropic/claude-haiku-5.5")
+        answer_all(build, "M", a)
+        cmd_candidates(a)
+        return cmd_build(a)
     log(f"step A via {a.llm}")
     answer_all(build, "A", a)
     if not glob.glob(os.path.join(build, "llm", "B_*.md")):
+        a.chunk = CHUNK_B
         cmd_candidates(a)
     log(f"step B via {a.llm}")
     answer_all(build, "B", a)
@@ -486,6 +747,8 @@ def main():
         p.add_argument("--subs", help="Japanese subtitle file (default: sidecar .ja.srt, embedded track, or Whisper)")
         p.add_argument("--whisper-model", default="auto", help="for alignment/transcription (auto: large-v3 on GPU)")
         p.add_argument("--youtube", help="YouTube video id, stored in web.json for the browser extension")
+        p.add_argument("--mode", choices=["high", "medium", "low"], default="high",
+                       help="how much the LLM does: high (everything), medium (picks dictionary senses), low (nothing)")
         p.add_argument("--word-times", help="word timings JSON ({\"words\": [{text, start, end}]}, e.g. a Soniox "
                                             "export) to use instead of Whisper alignment (default: <stem>.soniox.json)")
     pa = sub.choices["auto"]
@@ -493,9 +756,10 @@ def main():
     pa.add_argument("--model")
     pa.add_argument("--jobs", type=int, default=4)
     pcand = video_cmd("candidates", cmd_candidates)
-    for p, default in ((sub.choices["prepare"], CHUNK_A), (pcand, CHUNK_B)):
-        p.add_argument("--chunk", type=int, default=default, help="cues/items per prompt (bigger = fewer prompts)")
-    pa.add_argument("--chunk", type=int, default=CHUNK_A)
+    sub.choices["prepare"].add_argument("--chunk", type=int, help=f"cues per prompt (default {CHUNK_A} for step A, "
+                                        f"{CHUNK_M} for step M; bigger = fewer prompts)")
+    pcand.add_argument("--chunk", type=int, default=CHUNK_B, help="items per prompt (bigger = fewer prompts)")
+    pa.add_argument("--chunk", type=int)
     pbuild = video_cmd("build", cmd_build)
     pbuild.add_argument("--youtube", help="YouTube video id for web.json (default: the one given to prepare)")
     pbuild.add_argument("--web-only", action="store_true",

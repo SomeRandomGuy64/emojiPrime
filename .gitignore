@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 extension/test/clip.mp4
 extension/test/pack.js
+dict/_work/

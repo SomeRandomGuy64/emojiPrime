@@ -95,7 +95,7 @@ def read_srt(path):
 # ---------- emoji ----------
 
 # emoji that render letters, digits or kanji (they'd leak text onto the screen)
-_LETTERED = re.compile(r"[\U0001F170-\U0001F1FF\U0001F200-\U0001F2FF㊗㊙™ℹⓂ]"
+_LETTERED = re.compile(r"[\U0001F170-\U0001F1FF\U0001F200-\U0001F2FF㊗㊙™ℹⓂ🔠🔡🔢🔤🔣]"
                        r"|[0-9#*]️?⃣")
 _SWAP = {"🆘": "🛟", "🆓": "💸🚫", "🆚": "⚔️", "🈳": "🚫", "📅": "🗓️", "📆": "🗓️", "🆗": "👌", "🆕": "✨",
          "🔝": "⬆️", "🔙": "⏪", "🔜": "⏩", "🔚": "🏁"}
