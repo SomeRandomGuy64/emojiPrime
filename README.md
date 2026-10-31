@@ -108,6 +108,15 @@ If your subtitles came from a service with word timings (e.g. Soniox: `{"words":
 
 Medium and low use the **picture dictionary** in [`dict/`](dict): about 40,000 words, each with up to 3 senses (a short Japanese gloss, an emoji, sometimes an Irasutoya illustration), and about 950 idioms that are pictured as a whole (我に返る 😳💡, not 🏠 for 返る). Their rebus is built from the word emoji, set phrases, idioms and grammar (ない 🚫, た ⏪, か ❓). `dict/build_dict.py` rebuilds the dictionary: word frequency from YouTube and anime subtitles plus JPDB, senses and illustrations harvested from high-mode runs, and Sonnet for the rest.
 
+## Rebus style
+
+High mode needs `prepare --rebus idea` or `--rebus word`:
+
+- `idea`: one straight row of emoji per idea, shown whole when the idea starts, in one fixed spot that the other pictures keep clear of.
+- `word`: a tilted strip that builds up emoji by emoji as each word is said.
+
+Word pictures and illustrations work the same either way. Medium and low always use `word`.
+
 ## The Irasutoya catalog and the emoji-prime server
 
 Picture candidates come from a catalog of all ~25,000 Irasutoya posts: titles, descriptions, labels and image links, but no images. The catalog lives on the emoji-prime server at `api.fazon.nexus`, so the skill stays small and nobody has to download it. The server refreshes it from Irasutoya's public feed every week and also serves the [set phrases](phrases) and the picture dictionary, which it pulls from this repo's `phrases/` and `dict/` every hour.

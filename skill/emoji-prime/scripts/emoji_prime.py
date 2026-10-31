@@ -2,7 +2,7 @@
 """Emoji prime: pictures pop up over a Japanese video as each word is spoken (no English).
 
     emoji_prime.py update     (run first: brings the skill level with the repo)
-    emoji_prime.py prepare    VIDEO [--mode high|medium|low] [--subs FILE] [--word-times FILE] [--out DIR]
+    emoji_prime.py prepare    VIDEO [--mode high|medium|low] [--rebus idea|word] [--subs FILE] [--word-times FILE] [--out DIR]
     emoji_prime.py candidates VIDEO        (after the A_*.md or M_*.md prompts are answered)
     emoji_prime.py build      VIDEO        (after the B_*.md prompts are answered)
     emoji_prime.py auto       VIDEO --llm claude|openrouter [--model M] [--jobs 4]
@@ -42,19 +42,40 @@ PROMPT_A = """You are annotating a Japanese video for "emoji prime": pictures po
 For every cue in the JSON below (text = the spoken line with spaces removed; words = its content words as dictionary forms), produce:
 
 1. "s" (senses): for EVERY listed word, [sense, emoji]: sense = a very short Japanese monolingual gloss (2-8 characters) of the sense used IN THIS LINE; emoji = 1-3 emoji picturing that sense, or null. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
-2. "r" (rebus): 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
-3. "q" (queries): 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as [word, anchor], anchor = exact substring of the text. Use [] for cries, interjection-only and name-only lines.
+<REBUS>3. "q" (queries): 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as [word, anchor], anchor = exact substring of the text. Use [] for cries, interjection-only and name-only lines.
 
-4. Some cues have "set": prebaked set phrases with fixed emoji, as [emoji, the phrase as written in the text]. Put each one into the rebus exactly as given (that emoji, anchored to that phrase), and don't express it again with other emoji. The words inside a set phrase aren't listed, so they need no senses.
-
-Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 📅 🔟, keycaps and the like) or flags. No English anywhere.
+<SET>Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 📅 🔟, keycaps and the like) or flags. No English anywhere.
 
 Answer with ONLY a JSON object, no prose and no code fences:
-{"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": [["😱", "わあ"], ...], "q": [["<word>", "<anchor>"]]}, ...}
+{"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": <EXAMPLE>, "q": [["<word>", "<anchor>"]]}, ...}
 with every cue id.
 
 Cues:
 """
+
+REBUS_WORD = """2. "r" (rebus): 2-6 emoji conveying the gist of the WHOLE line, including grammar and tone: ❓ question, 🚫 negation, ✋ prohibition, 👉 command, 🙏 want/please, ⏪ past, ‼️ emphasis, plus the speaker's emotion. Screams, interjections and animal or creature cries get the emotion (わあああ -> 😱). Clever combos are encouraged (👂❓ for なに, 🫵🤡 for マヌケ). Give it as chunks [[emoji, anchor], ...] read left to right, where anchor is an EXACT substring (1-6 characters, copied exactly) of that cue's text: the word the chunk stands for, so it can appear the moment it is said. Grammar emoji anchor to their grammar (❓ -> か / の / 何, 🚫 -> ない, ⏪ -> た); an emotion emoji anchors to the interjection or the first word.
+"""
+
+SET_WORD = """4. Some cues have "set": prebaked set phrases with fixed emoji, as [emoji, the phrase as written in the text]. Put each one into the rebus exactly as given (that emoji, anchored to that phrase), and don't express it again with other emoji. The words inside a set phrase aren't listed, so they need no senses.
+
+"""
+
+REBUS_IDEA = """2. "r" (idea rebus): a layer separate from the word pictures, which already show every word as it is said. The rebus is ONE straight row of emoji that appears all at once and tells the watcher the IDEA being expressed: what the speaker actually means, not the words she uses. Read the neighbouring cues and work out the thoughts first. A single thought often runs over 1-3 cues. Give a list of ideas [[emoji_row, anchor], ...]: emoji_row = 1-5 emoji in one string, read left to right like a tiny sentence (who/what, what happens, how it turned out or how she feels), and anchor = an EXACT substring (1-6 characters, copied exactly) of that cue's text where the idea STARTS. Do NOT go word by word and do not restate the word pictures one by one. Leave out whatever doesn't carry the idea, and infer what is implied: the joke, the complaint, the point being made (追試落ちて頭おかしくなってた -> 📝❌🤪). Clever combos are encouraged. Use grammar markers (❓ 🚫 ⏪) only when they change the meaning. Most cues have one idea. Use [] when the cue only continues the idea already showing from the previous cue (it stays up). A cue holding two separate thoughts gets two. A standalone reaction or laugh gets its emotion (わろた -> 😂).
+"""
+
+SET_IDEA = """4. Some cues have "set": prebaked set phrases that already show as word pictures. The words inside a set phrase aren't listed, so they need no senses. Use them or not in the rebus as the idea needs.
+
+"""
+
+A_RULES = {"word": (REBUS_WORD, SET_WORD, '[["😱", "わあ"], ...]'),
+           "idea": (REBUS_IDEA, SET_IDEA, '[["📝❌🤪", "追試"], ...]')}
+
+
+def prompt_a(rebus):
+    """Step A's prompt for this rebus style."""
+    rule, sets, example = A_RULES[rebus]
+    return PROMPT_A.replace("<REBUS>", rule).replace("<SET>", sets).replace("<EXAMPLE>", example)
+
 
 PROMPT_M = """You are choosing word senses for "emoji prime": pictures pop up over a Japanese video as words are spoken, so a Japanese learner understands WITHOUT any English.
 
@@ -143,6 +164,11 @@ def prompt_text(md):
 
 def cmd_prepare(a):
     import ep_media as M
+    if a.mode == "high" and not a.rebus:
+        sys.exit("high mode needs --rebus idea or --rebus word: ask the user which they want")
+    if a.mode != "high" and a.rebus == "idea":
+        sys.exit("--rebus idea needs --mode high: only the LLM can write a rebus per idea")
+    a.rebus = a.rebus or "word"
     video, work, build = paths(a.video, a.out)
     os.makedirs(build, exist_ok=True)
     subs = os.path.abspath(a.subs) if a.subs else M.find_subs(video, build, a.whisper_model)
@@ -156,7 +182,7 @@ def cmd_prepare(a):
     spoken = [c for c in cues if c["text"]]
     sets = load_phrases(build, cues)
     jdump({"video": video, "work": work, "subs": subs, "whisper_model": a.whisper_model, "youtube": a.youtube,
-           "mode": a.mode}, os.path.join(build, "state.json"))
+           "mode": a.mode, "rebus": a.rebus}, os.path.join(build, "state.json"))
     log(f"{len(spoken)} spoken cues, {sum(len(c['words']) for c in spoken)} content words, "
         f"{sum(len(m) for m in sets.values())} set phrases")
     words = a.word_times
@@ -183,7 +209,7 @@ def cmd_prepare(a):
         chunk = a.chunk or CHUNK_A
         chunks = [[a_entry(c, sets.get(str(c["cue"]), [])) for c in spoken[i:i + chunk]]
                   for i in range(0, len(spoken), chunk)]
-        files = write_prompts(build, "A", PROMPT_A, chunks)
+        files = write_prompts(build, "A", prompt_a(a.rebus), chunks)
         print(f"\n{len(files)} prompt(s) to answer (step A):")
     for md, out in files:
         print(f"  {md}\n    -> {out}")
@@ -519,7 +545,8 @@ def cmd_candidates(a):
             senses = {lm: s for lm, s in senses.items() if not inside(c["words"][lm][1], ms, len(c["words"][lm][0]))}
             for m in ms:
                 senses[m["phrase"]] = {"sense": m["gloss"], "emoji": clean_emoji(m["emoji"]), "set": [m["form"], m["start"]]}
-            rebus = with_set_chunks(rebus, text, ms)
+            if st.get("rebus") != "idea":
+                rebus = with_set_chunks(rebus, text, ms)
             queries = [q for q in queries if not (q["anchor"] and inside(text.find(q["anchor"]), ms, len(q["anchor"])))]
         plan[str(cid)] = {"senses": senses, "rebus": rebus, "queries": queries}
     missing = [k for k, c in cues.items() if c["text"] and k not in plan]
@@ -632,7 +659,7 @@ def cmd_build(a):
                 M.place(cuesp, video, os.path.join(build, "placement.json"))
     align, place = jload(os.path.join(build, "align.json")), jload(os.path.join(build, "placement.json"))
     O.build(cues, align, place, plan, work, pre=a.pre, stay=a.stay, youtube=a.youtube or st.get("youtube"),
-            web_only=a.web_only)
+            web_only=a.web_only, rebus=st.get("rebus", "word"))
     if a.web_only:
         print(f"\nweb pack: {os.path.join(work, 'web.json')}")
         print("  load it from the YouTube Emoji Prime panel on the video's page")
@@ -760,6 +787,9 @@ def main():
         p.add_argument("--subs", help="Japanese subtitle file (default: sidecar .ja.srt, embedded track, or Whisper)")
         p.add_argument("--whisper-model", default="auto", help="for alignment/transcription (auto: large-v3 on GPU)")
         p.add_argument("--youtube", help="YouTube video id, stored in web.json for the browser extension")
+        p.add_argument("--rebus", choices=["idea", "word"],
+                       help="idea: one straight row per idea, shown whole; word: builds up word by word. Required "
+                            "in high mode: ask the user. Medium and low always use word.")
         p.add_argument("--mode", choices=["high", "medium", "low"], default="high",
                        help="how much the LLM does: high (everything), medium (picks dictionary senses), low (nothing)")
         p.add_argument("--word-times", help="word timings JSON ({\"words\": [{text, start, end}]}, e.g. a Soniox "

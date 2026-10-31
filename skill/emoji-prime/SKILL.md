@@ -39,6 +39,15 @@ In medium and low, idioms (also from the server) are matched before single words
 
 For `medium`, step 2 below answers the `M_NN.md` prompts instead of `A_NN.md` (with model `haiku`), and `candidates` then goes straight to the build. For `low`, `prepare` prints the `build` command directly.
 
+### Rebus style
+
+In high mode, **always ask the user before running `prepare`, every time, even if they've said everything else**: do they want an idea rebus or a per-word rebus? `prepare` refuses to start without `--rebus`.
+
+- `--rebus idea`: one straight row of emoji per idea, shown whole when the idea starts, always in the same spot. Other pictures stay out of that space. Word pictures and illustrations still pop up per word.
+- `--rebus word`: a tilted strip that builds up emoji by emoji as each word is said. This helps most when the user is still learning to hear word boundaries.
+
+Medium and low always use the per-word rebus, because only the LLM can write one per idea, so don't ask there.
+
 ### 0. Dependencies
 
 Check, and install only what's missing:
@@ -51,7 +60,7 @@ Check, and install only what's missing:
 ### 1. Prepare
 
 ```
-emoji_prime.py prepare VIDEO
+emoji_prime.py prepare VIDEO --rebus idea|word
 ```
 
 - **Subtitles:** it finds Japanese subtitles in this order:
