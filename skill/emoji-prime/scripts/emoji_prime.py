@@ -44,7 +44,7 @@ For every cue in the JSON below (text = the spoken line with spaces removed; wor
 1. "s" (senses): for EVERY listed word, [sense, emoji]: sense = a very short Japanese monolingual gloss (2-8 characters) of the sense used IN THIS LINE; emoji = 1-3 emoji picturing that sense, or null. Choose the contextual sense (飲み込む said of a whirlpool swallowing people -> 🌀, not eating). Use null for words that can't be pictured in this sense (abstract or grammar-like uses), for names, for cries and interjection fragments, and for obvious misparses.
 <REBUS>3. "q" (queries): 0-2 words to search an illustration catalog (Irasutoya) with, for a picture that conveys the line's gist: a single common Japanese word in dictionary form (竜巻, 驚く, 電話, 喜ぶ, 怒る, お金). Each as [word, anchor], anchor = exact substring of the text. Use [] for cries, interjection-only and name-only lines.
 
-<SET>Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 📅 🔟, keycaps and the like) or flags. No English anywhere.
+<SET>Never use emoji that show letters or kanji (🆗 🆘 🆓 🆚 🈳 📅 and the like) or flags. No English anywhere. Digits are fine: keycaps (1️⃣ 2️⃣) can show a number or a rank.
 
 Answer with ONLY a JSON object, no prose and no code fences:
 {"<cue>": {"s": {"<word>": ["<sense>", "<emoji>" or null]}, "r": <EXAMPLE>, "q": [["<word>", "<anchor>"]]}, ...}
@@ -85,7 +85,7 @@ For every cue below (text = the spoken line), "w" lists the words whose sense yo
 
 Also give "g": a word to search an illustration catalog (Irasutoya) with, for one picture that conveys the line's gist, as [word, anchor]: word = a single common Japanese word in dictionary form (電話, 驚く, 喜ぶ, お金, 旅行), anchor = an EXACT substring (1-6 characters) of the text where that idea is said. Use null for filler, greetings, cries and very short lines.
 
-Also give "e": ONE emoji for the line's tone or the speaker's emotion when it is strong and clear (😱 a scream, 😂 laughing, 😡 anger, 🥺 pleading, 😮 surprise), else null. Never use emoji that show letters, digits or kanji, or flags.
+Also give "e": ONE emoji for the line's tone or the speaker's emotion when it is strong and clear (😱 a scream, 😂 laughing, 😡 anger, 🥺 pleading, 😮 surprise), else null. Never use emoji that show letters or kanji, or flags.
 
 Answer with ONLY a JSON object, no prose and no code fences: {"<cue>": {"e": "<emoji>" or null, "g": ["<word>", "<anchor>"] or null, "w": {"<word>": index or null or ["<gloss>", "<emoji>"]}}, ...} with every cue id.
 
@@ -222,7 +222,14 @@ def load_phrases(build, cues):
     path = os.path.join(build, "phrases.json")
     if not os.path.exists(path):
         import ep_media as M
-        jdump(API.match_phrases(M.add_bounds([c for c in cues if c["text"]]), API.phrases()), path)
+        spoken = M.add_bounds([c for c in cues if c["text"]])
+        sets = API.match_phrases(spoken, API.phrases())
+        for c in spoken:
+            ms = sets.get(str(c["cue"]), [])
+            nums = M.number_matches(c, ms)
+            if nums:
+                sets[str(c["cue"])] = sorted(ms + nums, key=lambda m: m["start"])
+        jdump(sets, path)
     return jload(path)
 
 
@@ -556,13 +563,13 @@ def cmd_candidates(a):
         log(f"{n_bad} rebus anchor(s) weren't substrings of their line; those emoji get approximate timing")
     jdump(plan, os.path.join(build, "plan_a.json"))
 
-    wanted = [lm for p in plan.values() for lm, s in p["senses"].items() if s["emoji"] and not s.get("set")]
+    wanted = [lm for p in plan.values() for lm, s in p["senses"].items() if s["emoji"] and s["sense"] != "数"]
     search = IR.search_many(wanted + [q["q"] for p in plan.values() for q in p["queries"]], N_CAND)
     items, seen = [], {}
     for cid, p in plan.items():
         for lemma, s in p["senses"].items():
-            if not s["emoji"] or s.get("set") or (lemma, s["sense"]) in seen:
-                continue  # set phrases keep their fixed emoji, so they get no illustration
+            if not s["emoji"] or s["sense"] == "数" or (lemma, s["sense"]) in seen:
+                continue  # numbers are drawn digit by digit; a set phrase keeps its emoji if no illustration fits
             seen[(lemma, s["sense"])] = None
             cand = search.get(lemma)
             if cand:

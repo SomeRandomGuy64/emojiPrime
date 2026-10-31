@@ -117,6 +117,10 @@ High mode needs `prepare --rebus idea` or `--rebus word`:
 
 Word pictures and illustrations work the same either way. Medium and low always use `word`.
 
+## Numbers
+
+Numbers show as Irasutoya digit stickers in every mode, with no LLM involved: 17歳 gets a 1 and a 7 side by side. A picture that contains keycap emoji (a set phrase like 3️⃣🌙 for 三月) is drawn the same way. The per-word rebus strip is text, so it keeps keycaps.
+
 ## The Irasutoya catalog and the emoji-prime server
 
 Picture candidates come from a catalog of all ~25,000 Irasutoya posts: titles, descriptions, labels and image links, but no images. The catalog lives on the emoji-prime server at `api.fazon.nexus`, so the skill stays small and nobody has to download it. The server refreshes it from Irasutoya's public feed every week and also serves the [set phrases](phrases) and the picture dictionary, which it pulls from this repo's `phrases/` and `dict/` every hour.

@@ -4,7 +4,7 @@ import json, os, re, subprocess, tempfile
 from ep_common import jdump, jload, log, read_srt
 
 CONTENT_POS = {"名詞", "動詞", "形容詞", "形状詞", "副詞"}
-SKIP_POS2 = {"固有名詞", "数詞"}  # names and numbers aren't worth a picture
+SKIP_POS2 = {"固有名詞", "数詞"}  # names aren't worth a picture; numbers get theirs from number_matches
 # function-like lemmas that would only waste the LLM's time
 STOP = {"為る", "居る", "有る", "成る", "呉れる", "下さる", "遣る", "貰う", "仕舞う", "無い", "事", "物", "様", "為",
         "訳", "筈", "所", "方", "達", "奴", "其れ", "此れ", "彼れ", "何", "そう", "こう", "ああ", "どう"}
@@ -97,6 +97,53 @@ def add_bounds(cues):
                 bounds |= {at, pos}
         c["bounds"] = sorted(bounds)
     return cues
+
+
+# ---------- numbers ----------
+
+_NUMBER = re.compile(r"[0-9０-９〇一二三四五六七八九十百千万億]+")
+_DIGIT = {c: d for d, cs in enumerate(zip("０１２３４５６７８９", "〇一二三四五六七八九")) for c in cs}
+_UNIT = {"十": 10, "百": 100, "千": 1000}
+_BIG = {"万": 10000, "億": 100000000}
+
+
+def number_value(s):
+    """17, １７, 十七, 二〇二六, 3万 -> the number."""
+    s = "".join(str(_DIGIT.get(c, c)) for c in s)
+    total = section = cur = 0
+    for c in s:
+        if c.isdigit():
+            cur = cur * 10 + int(c)
+        elif c in _UNIT:
+            section += (cur or 1) * _UNIT[c]
+            cur = 0
+        else:
+            total += (section + cur or 1) * _BIG[c]
+            section = cur = 0
+    return total + section + cur
+
+
+def keycaps(n):
+    """The number as keycap emoji, or None when it's too long to read at a glance. The overlay shows keycaps as
+    Irasutoya digits."""
+    return "".join(d + "\ufe0f\u20e3" for d in str(n)) if n < 100000 else None
+
+
+def number_matches(c, taken):
+    """A cue's numbers in the shape of set-phrase matches, so they show the same way in every mode without asking the
+    LLM. On token boundaries only, so 一生 and 十分 are left alone; never inside a phrase in `taken`."""
+    out = []
+    bounds = set(c["bounds"])
+    for m in _NUMBER.finditer(c["text"]):
+        a, b = m.span()
+        if a not in bounds or b not in bounds or any(a < t["end"] and b > t["start"] for t in taken):
+            continue
+        if a and c["text"][a - 1].isascii() and c["text"][a - 1].isalpha():
+            continue  # part of a name: MP3
+        emoji = keycaps(number_value(m[0]))
+        if emoji:
+            out.append({"phrase": m[0], "form": m[0], "start": a, "end": b, "emoji": emoji, "gloss": "数"})
+    return out
 
 
 # ---------- alignment (background) ----------

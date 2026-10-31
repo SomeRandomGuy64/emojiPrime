@@ -94,12 +94,13 @@ def read_srt(path):
 
 # ---------- emoji ----------
 
-# emoji that render letters, digits or kanji (they'd leak text onto the screen)
+# emoji that render letters or kanji (they'd leak text onto the screen). Digits are fine: a number means the same
+# in any language, so keycaps stay.
 _LETTERED = re.compile(r"[\U0001F170-\U0001F1FF\U0001F200-\U0001F2FF㊗㊙™ℹⓂ🔠🔡🔢🔤🔣]"
-                       r"|[0-9#*]️?⃣")
+                       r"|[#*]️?⃣")
 _SWAP = {"🆘": "🛟", "🆓": "💸🚫", "🆚": "⚔️", "🈳": "🚫", "📅": "🗓️", "📆": "🗓️", "🆗": "👌", "🆕": "✨",
          "🔝": "⬆️", "🔙": "⏪", "🔜": "⏩", "🔚": "🏁"}
-_TEXTY = re.compile(r"[A-Za-z0-9぀-ヿ一-鿿]")
+_TEXTY = re.compile(r"[A-Za-z぀-ヿ一-鿿]|[0-9](?!️?⃣)")
 
 
 def clean_emoji(s):

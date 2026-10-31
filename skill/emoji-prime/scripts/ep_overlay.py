@@ -6,12 +6,15 @@ The sentence rebus is one strip per cue that builds up chunk by chunk as each an
 import os, shutil
 
 from ep_common import BOX, SCALE, SIZES, emoji_strip, graphemes, jdump, jitter, log, render, tilt
+from ep_irasutoya import DIGITS, fetch_image
 
 MIN_IDEA = 2.5  # seconds an idea strip needs to be read
 IDEA_GAP = 2.5  # a cue further than this from the strip's end doesn't continue its idea
 EMPTY = 5.0  # edge score under which a cell counts as empty
 STRIP_W, STRIP_H = 0.18, 0.08  # half size of the widest idea strip, as fractions of the video
-PIC_W, PIC_H = 0.08, 0.15  # half size of the largest tilted picture
+PIC_W, PIC_H = 0.1, 0.15  # half size of the largest tilted picture
+ROW_STEP, ROW_SCALE = 0.056, 0.5  # a row of digit stickers: spacing (fraction of the width) and size
+STRIP_STEP, STRIP_DIGIT, STRIP_EMOJI = 0.072, 0.6, 0.5  # the same for an idea strip with digits in it
 
 
 def span(words, text, start, end, off, length):
@@ -21,6 +24,29 @@ def span(words, text, start, end, off, length):
         return hit[0][2], hit[-1][3]
     n = max(1, len(text))
     return start + (end - start) * off / n, start + (end - start) * min(n, off + length) / n
+
+
+def row_scale(base, row, cap, width):
+    """The extension fits a row by code points, which joined emoji (keycaps, 🏃‍➡️) inflate, so a pack sets each row's
+    size itself: the scale that makes the row as big as its visible emoji count deserves."""
+    return round(base * min(cap, width / len(graphemes(row))) / min(cap, width / len(row)), 3)
+
+
+def row_parts(row, web_only, step=ROW_STEP):
+    """A picture with digits in it as stickers side by side, the digits as Irasutoya images: 1️⃣7️⃣ -> [1, 7]. Each part
+    is a word payload, with dx its offset from the row's centre. None if the row has no digits."""
+    glyphs = [str(k) for g in graphemes(row) for k in ([1, 0] if g == "🔟" else [g[0]] if g[0].isdigit() else [g])]
+    if not any(g.isdigit() for g in glyphs):
+        return None
+    parts = []
+    for k, g in enumerate(glyphs):
+        dx = round((k - (len(glyphs) - 1) / 2) * step, 3)
+        if g.isdigit():
+            url = DIGITS[g]
+            parts.append({"image": url if web_only else fetch_image(url), "url": url, "title": g, "dx": dx})
+        else:
+            parts.append({"emoji": g, "dx": dx})
+    return parts
 
 
 def idea_spot(place):
@@ -47,9 +73,9 @@ def in_strip(spot, strip):
     return abs(spot[0] - strip[0]) < STRIP_W + PIC_W and abs(spot[1] - strip[1]) < 0.12
 
 
-def clear_of(pos, strip):
+def clear_of(pos, strip, half=PIC_W):
     """The picture's position, moved the short way out of the strip's space if jitter pushed it in."""
-    dx, dy = STRIP_W + PIC_W - abs(pos[0] - strip[0]), STRIP_H + PIC_H - abs(pos[1] - strip[1])
+    dx, dy = STRIP_W + half - abs(pos[0] - strip[0]), STRIP_H + PIC_H - abs(pos[1] - strip[1])
     if dx <= 0 or dy <= 0:
         return pos
     if dx < dy:
@@ -118,12 +144,20 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
                 prev = t0 = max(t0, prev) if prev is not None else t0
                 if at >= 0:
                     pos = at
+                end, parts = max(last + stay, t0 + MIN_IDEA), row_parts(row, web_only, STRIP_STEP)
                 row = graphemes(row)
-                open_idea = [t0 - pre, max(last + stay, t0 + MIN_IDEA), cid, "rebus", (row, len(row)), f"r{cid}_{k}"]
+                open_idea = [t0 - pre, end, cid, "rebus", (row, len(row)), f"r{cid}_{k}"]
+                if parts:  # digits are images, so this strip is a row of stickers instead of one line of text
+                    open_idea = [t0 - pre, end, cid, "word", {"emoji": "", **parts[0], "strip": True}, f"r{cid}_{k}"]
+                    events += [[t0 - pre, end, cid, "word", {"emoji": "", **p, "strip": True}, f"r{cid}_{k}"]
+                               for p in parts[1:]]
                 events.append(open_idea)
         elif strip:  # no chunk: the cue continues the idea on screen
             if open_idea and c["start"] - open_idea[1] < IDEA_GAP:
-                open_idea[1] = max(open_idea[1], last + stay)
+                for e in events[::-1]:
+                    if e[5] != open_idea[5]:
+                        break
+                    e[1] = max(e[1], last + stay)
         elif chunks:
             times, pos = [], 0
             for _, anc in chunks:
@@ -150,17 +184,23 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
         for lemma, wp in p.get("words", {}).items():
             surface, off = c["words"][lemma]
             t0, t1 = tm(off, len(surface))
-            events.append([t0 - pre, max(t1 + stay, t0 + min_on), cid, "word", dict(wp, lemma=lemma), None])
+            word = dict(wp, lemma=lemma)
+            parts = None if wp.get("image") else row_parts(wp["emoji"], web_only)
+            for part in parts or [word]:
+                events.append([t0 - pre, max(t1 + stay, t0 + min_on), cid, "word",
+                               {**word, "image": None, **part, "n": len(parts)} if parts else word,
+                               f"n{cid}_{off}" if parts else None])
 
     # one rebus on screen at a time: a new line's strip cuts the previous one
+    is_strip = lambda e: e[3] == "rebus" or (e[3] == "word" and e[4].get("strip"))  # noqa: E731
     first = {}
     for e in sorted(events, key=lambda e: e[0]):
-        if e[3] == "rebus":
+        if is_strip(e):
             first.setdefault(e[5], e[0])
     order = sorted(first.items(), key=lambda x: x[1])
     nxt = {g: order[i + 1][1] for i, (g, _) in enumerate(order[:-1])}
     for e in events:
-        if e[3] == "rebus" and e[5] in nxt:
+        if is_strip(e) and e[5] in nxt:
             e[1] = min(e[1], nxt[e[5]])
     events = sorted((e for e in events if e[1] > e[0] + 0.05), key=lambda e: e[0])
 
@@ -169,14 +209,15 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
         start = max(0.0, start)
         active = [it for it in active if it["end"] > start]
         src = None if kind == "rebus" else (os.path.basename(v["image"]) if v.get("image") else v["emoji"])
-        same = src and next((it for it in active if it["src"] == src), None)
+        same = src and "dx" not in v and next((it for it in active if it["src"] == src and not it.get("strip")), None)
         if same:  # already up (another layer, or the last line): keep it up instead of showing it twice
             same["end"] = round(max(same["end"], end), 3)
             continue
         spots = [tuple(s[:2]) for s in place.get(cid) or [[0.5, 0.38, 0]]]
         if strip:
             spots = [s for s in spots if not in_strip(s, strip)] or spots
-        if strip and kind == "rebus":
+        on_strip = kind == "rebus" or v.get("strip")
+        if strip and on_strip:
             spot, blocks = strip, []
         elif group in group_spot:
             spot, blocks = group_spot[group]
@@ -204,20 +245,22 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
                 continue
             angle = 0 if strip else tilt(group) / 2
             label = "".join(emoji[:shown])
-            web = {"ch": emoji, "shown": shown, "sc": SCALE["rebus"]}
+            web = {"ch": emoji, "shown": shown, "sc": row_scale(SCALE["rebus"], "".join(emoji), 0.8, 3.2)}
         else:
-            key = (kind, src)
-            angle = tilt(f"{cid}:{src}")
+            key = (kind, src, "dx" in v and angle)
+            angle = tilt(f"{cid}:{src}") if "dx" not in v else 0 if v.get("strip") else tilt(group) / 3
+            size = (SCALE["vlog"] if kind == "vlog" else STRIP_DIGIT if v.get("strip") else ROW_SCALE if "dx" in v
+                    else SCALE["word_img"])
             if v.get("image"):
-                web = {"u": v.get("url"), "sc": SCALE["vlog"] if kind == "vlog" else SCALE["word_img"]}
+                web = {"u": v.get("url"), "sc": size}
             else:
-                web = {"em": v["emoji"], "sc": SCALE["word_emoji"]}
+                web = {"em": v["emoji"], "sc": STRIP_EMOJI if v.get("strip") else
+                       row_scale(SCALE["word_emoji"], v["emoji"], 0.7, 1.8)}
             if web_only:
                 rendered[key] = ""
             if key not in rendered:  # same picture again later: reuse the files
                 if v.get("image"):
-                    s = SCALE["vlog"] if kind == "vlog" else SCALE["word_img"]
-                    rendered[key] = render(v["image"], angle, stem, s)
+                    rendered[key] = render(v["image"], angle, stem, size)
                 else:
                     im = emoji_strip([v["emoji"]])
                     rendered[key] = render(im, angle, stem, SCALE["word_emoji"]) if im else None
@@ -225,19 +268,25 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
             if img is None:
                 continue
             label = v.get("title") or v.get("lemma") or ""
-        dx, dy = (0, 0) if strip and kind == "rebus" else jitter(f"{cid}:{group or len(items)}")
+        dx, dy = (0, 0) if strip and on_strip else jitter(f"{cid}:{group or len(items)}")
         pos = [round(spot[0] + dx, 3), round(spot[1] + dy, 3)]
-        if strip and kind != "rebus":
-            pos = clear_of(pos, strip)
+        half = v.get("n", 1) * ROW_STEP / 2 + 0.02 if "dx" in v else PIC_W
+        if strip and not on_strip:
+            pos = clear_of(pos, strip, half)
+        if on_strip and "dx" in v:
+            pos = [round(pos[0] + v["dx"], 3), pos[1]]
+        elif "dx" in v:  # the row stays whole on screen
+            pos = [round(min(max(pos[0], half), 1 - half) + v["dx"], 3), pos[1]]
         it = dict(start=round(start, 3), end=round(end, 3), cue=int(cid), kind=kind, label=label, src=src,
                   group=group, blocks=[list(b) for b in blocks],
-                  pos=pos, img=img, angle=angle, web=web)
+                  pos=pos, img=img, angle=angle, web=web, strip=bool(v and isinstance(v, dict) and v.get("strip")))
         items.append(it)
         active.append(it)
     items.sort(key=lambda x: x["start"])
     web_items = web_export(items)
     for it in items:
         it.pop("web", None)
+        it.pop("strip", None)
     if not web_only:  # mpv's overlay needs the rendered images
         jdump({"mode": "vlog", "box": BOX, "sizes": SIZES, "items": items}, os.path.join(out_dir, "overlay.json"))
     jdump({"format": "emoji-prime-web", "version": 1, "box": BOX, "youtube": youtube, "items": web_items},
