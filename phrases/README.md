@@ -12,7 +12,7 @@ The columns are tab-separated. Lines starting with `#` are comments.
 |---|---|
 | phrase | The canonical form. |
 | other forms | Other ways it's spoken or written, separated by `\|`: kana spellings, polite/plain forms, Kansai-ben (ほんま, おおきに). A form may appear in only one row. |
-| emoji | 1–4 emoji. Never use emoji that show letters, digits or kanji, 📅/📆, or flags. |
+| emoji | 1–4 emoji. Never use emoji that show letters or kanji, 📅/📆, or flags. Digits are fine (1️⃣🌙 for 一月). |
 | gloss | A short Japanese monolingual gloss. It's used as the word's sense. |
 | English | For maintainers only. It's never shown on screen. |
 

@@ -9,7 +9,7 @@ For every phrase, give 1–4 emoji that a viewer would read as that phrase at a 
 - Picture the **meaning in use**, not the words: a greeting is the gesture or situation it belongs to, not a literal reading of its parts.
 - Be **consistent across related phrases**: time words should form one system (for example ⏪ past, ⏩ future, 👇 this one), and so should greetings.
 - Fewer emoji are better when they're clear. Clever combos are welcome (👂❓ for なに).
-- Never use emoji that show letters, digits or kanji (🆗 🆘 🆓 🆚 🈳 🔟, keycaps and the like), 📅 and 📆 (they show a date), or flags. No English anywhere.
+- Never use emoji that show letters or kanji (🆗 🆘 🆓 🆚 🈳 and the like), 📅 and 📆 (they show a date), or flags. No English anywhere.
 
 Write ONLY a JSON object to the output path you were given, with no prose and no code fences, and include every phrase:
 {"<phrase>": "<emoji>", ...}
