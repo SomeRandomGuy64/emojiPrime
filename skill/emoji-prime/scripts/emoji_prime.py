@@ -129,7 +129,7 @@ def prompt_file(build, tag, i):
 def write_prompts(build, tag, header, chunks):
     d = os.path.join(build, "llm")
     os.makedirs(d, exist_ok=True)
-    for old in glob.glob(os.path.join(d, f"{tag}_*.md")):
+    for old in glob.glob(os.path.join(glob.escape(d), f"{tag}_*.md")):
         os.remove(old)
     files = []
     for i, ch in enumerate(chunks):
@@ -144,7 +144,7 @@ def write_prompts(build, tag, header, chunks):
 def read_answers(build, tag):
     """Merged JSON answers for tag; exits listing any prompt that has no valid answer yet."""
     merged, missing = {}, []
-    for md in sorted(glob.glob(os.path.join(build, "llm", f"{tag}_*.md"))):
+    for md in sorted(glob.glob(os.path.join(glob.escape(build), "llm", f"{tag}_*.md"))):
         out = md[:-3] + ".json"
         try:
             raw = open(out, encoding="utf-8").read()
@@ -688,7 +688,7 @@ def cmd_status(a):
         print("not prepared yet")
         return
     for tag in ("A", "M", "B"):
-        mds = sorted(glob.glob(os.path.join(build, "llm", f"{tag}_*.md")))
+        mds = sorted(glob.glob(os.path.join(glob.escape(build), "llm", f"{tag}_*.md")))
         todo = [m for m in mds if not os.path.exists(m[:-3] + ".json")]
         if not mds:
             continue
@@ -727,7 +727,7 @@ def ask(prompt, a):
 
 
 def answer_all(build, tag, a):
-    mds = [m for m in sorted(glob.glob(os.path.join(build, "llm", f"{tag}_*.md"))) if not os.path.exists(m[:-3] + ".json")]
+    mds = [m for m in sorted(glob.glob(os.path.join(glob.escape(build), "llm", f"{tag}_*.md"))) if not os.path.exists(m[:-3] + ".json")]
 
     def one(md):
         jdump(ask(prompt_text(md), a), md[:-3] + ".json")
@@ -751,7 +751,7 @@ def cmd_auto(a):
         return cmd_build(a)
     log(f"step A via {a.llm}")
     answer_all(build, "A", a)
-    if not glob.glob(os.path.join(build, "llm", "B_*.md")):
+    if not glob.glob(os.path.join(glob.escape(build), "llm", "B_*.md")):
         a.chunk = CHUNK_B
         cmd_candidates(a)
     log(f"step B via {a.llm}")

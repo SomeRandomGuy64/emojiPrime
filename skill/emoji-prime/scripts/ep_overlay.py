@@ -247,8 +247,8 @@ def build(cues, align, place, plan, out_dir, pre=0.1, stay=1.0, min_on=1.2, yout
             label = "".join(emoji[:shown])
             web = {"ch": emoji, "shown": shown, "sc": row_scale(SCALE["rebus"], "".join(emoji), 0.8, 3.2)}
         else:
-            key = (kind, src, "dx" in v and angle)
             angle = tilt(f"{cid}:{src}") if "dx" not in v else 0 if v.get("strip") else tilt(group) / 3
+            key = (kind, src, "dx" in v and angle)
             size = (SCALE["vlog"] if kind == "vlog" else STRIP_DIGIT if v.get("strip") else ROW_SCALE if "dx" in v
                     else SCALE["word_img"])
             if v.get("image"):
